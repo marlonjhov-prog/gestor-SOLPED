@@ -257,14 +257,16 @@
       
       reader.onload = async function () {
         const base64Data = reader.result.split(',')[1];
-        const payload = { fileName: file.name, fileData: base64Data };
+
+        // Codificación de datos como formulario para evitar problemas CORS
+        const formData = new URLSearchParams();
+        formData.append('fileName', file.name);
+        formData.append('fileData', base64Data);
 
         try {
           const response = await fetch(SCRIPT_URL, {
             method: 'POST',
-            redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
+            body: formData
           });
 
           const result = await response.json();
@@ -276,11 +278,11 @@
             loadDocuments();
           } else {
             statusMsg.className = "status-msg error";
-            statusMsg.innerText = "Error: " + (result.message || "Fallo inesperado");
+            statusMsg.innerText = "Error servidor: " + (result.message || "Fallo inesperado");
           }
         } catch (err) {
           statusMsg.className = "status-msg error";
-          statusMsg.innerText = "Error al procesar el archivo.";
+          statusMsg.innerText = "Error de red o envío al procesar el archivo.";
         }
       };
     }
@@ -297,7 +299,7 @@
       const tableBody = document.getElementById('docsTable');
 
       if (documents.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color: #64748b;">No hay documentos.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color: #64748b;">No hay documentos registrados.</td></tr>';
         return;
       }
 
