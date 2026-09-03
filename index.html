@@ -27,7 +27,6 @@
     .container { max-width: 900px; margin: 0 auto; }
     .hidden { display: none !important; }
 
-    /* Estilos del Login */
     .login-wrapper {
       display: flex;
       justify-content: center;
@@ -126,12 +125,12 @@
 
   <div class="container">
 
-    <!-- 1. PANTALLA DE ACCESO (LOGIN) -->
+    <!-- LOGIN -->
     <div id="loginScreen" class="login-wrapper">
       <div class="card login-card">
         <h2>Acceso Restringido</h2>
         <p style="margin-bottom: 20px; color: #64748b; font-size: 14px;">
-          Ingresa la clave de acceso para ver y gestionar los documentos.
+          Ingresa la clave para acceder a los documentos.
         </p>
         <form onsubmit="handleLogin(event)">
           <label for="passInput">Contraseña de acceso:</label>
@@ -142,7 +141,7 @@
       </div>
     </div>
 
-    <!-- 2. APLICACIÓN PRINCIPAL -->
+    <!-- APP PRINCIPAL -->
     <div id="appScreen" class="hidden">
       
       <div class="header-bar">
@@ -150,7 +149,6 @@
         <button class="btn-logout" onclick="handleLogout()">Cerrar Sesión</button>
       </div>
 
-      <!-- Adjuntar PDF -->
       <div class="card">
         <h3>Adjuntar nuevo PDF</h3>
         <input type="file" id="pdfInput" accept="application/pdf" />
@@ -158,7 +156,6 @@
         <p id="statusMsg" class="status-msg"></p>
       </div>
 
-      <!-- Lista y Búsqueda -->
       <div class="card">
         <h3>Documentos Disponibles</h3>
         
@@ -181,9 +178,7 @@
                 <th style="width: 20%;">Acción</th>
               </tr>
             </thead>
-            <tbody id="docsTable">
-              <!-- Se carga dinámicamente -->
-            </tbody>
+            <tbody id="docsTable"></tbody>
           </table>
         </div>
       </div>
@@ -193,10 +188,7 @@
   </div>
 
   <script>
-    // URL de tu aplicación web desplegada en Apps Script
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec";
-    
-    // Configura la contraseña que desees
     const ACCESS_PASSWORD = "1234"; 
 
     let allDocuments = [];
@@ -218,7 +210,7 @@
         document.getElementById('passInput').value = "";
         showAppScreen();
       } else {
-        errorElem.innerText = "Contraseña incorrecta. Inténtalo de nuevo.";
+        errorElem.innerText = "Contraseña incorrecta.";
       }
     }
 
@@ -243,7 +235,7 @@
         allDocuments = await response.json();
         renderDocuments(allDocuments);
       } catch (err) {
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#dc2626;">Error al conectar con la base de datos.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#dc2626;">Error al cargar lista.</td></tr>';
       }
     }
 
@@ -270,6 +262,8 @@
         try {
           const response = await fetch(SCRIPT_URL, {
             method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
           });
 
@@ -282,11 +276,11 @@
             loadDocuments();
           } else {
             statusMsg.className = "status-msg error";
-            statusMsg.innerText = "Error: " + result.message;
+            statusMsg.innerText = "Error: " + (result.message || "Fallo inesperado");
           }
         } catch (err) {
           statusMsg.className = "status-msg error";
-          statusMsg.innerText = "Error de conexión al enviar el archivo.";
+          statusMsg.innerText = "Error al procesar el archivo.";
         }
       };
     }
@@ -303,7 +297,7 @@
       const tableBody = document.getElementById('docsTable');
 
       if (documents.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color: #64748b;">No hay documentos registrados.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color: #64748b;">No hay documentos.</td></tr>';
         return;
       }
 
