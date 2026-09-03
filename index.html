@@ -257,7 +257,7 @@
         renderSolpeds(allSolpeds);
       } catch (err) {
         console.error("Error al cargar datos:", err);
-      } font-semibold
+      } finally {
         if (refreshIcon) refreshIcon.classList.remove('fa-spin');
       }
     }
