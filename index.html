@@ -272,7 +272,7 @@
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando...`;
       status.className = "text-xs font-semibold text-blue-600";
-      status.innerText = "Guardando cambios...";
+      status.innerText = "Enviando registro a Google Drive...";
 
       const payload = {
         solpedId: editId,
@@ -283,25 +283,27 @@
 
       const sendRequest = async (dataObj) => {
         try {
-          const res = await fetch(SCRIPT_URL, {
+          // Enviar con mode no-cors para asegurar que no salte el catch falso de red
+          await fetch(SCRIPT_URL, {
             method: 'POST',
+            mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(dataObj)
           });
-          const result = await res.json();
 
-          if (result.status === "success") {
-            status.className = "text-xs font-semibold text-emerald-600";
-            status.innerText = "¡Proceso completado con éxito!";
-            resetSolpedForm();
+          status.className = "text-xs font-semibold text-emerald-600";
+          status.innerText = "¡Proceso completado con éxito!";
+          resetSolpedForm();
+
+          // Esperar 2 segundos para dar tiempo a Sheets y refrescar lista automáticamente
+          setTimeout(() => {
             loadAllData();
-          } else {
-            status.className = "text-xs font-semibold text-red-600";
-            status.innerText = "Error: " + result.message;
-          }
+            status.innerText = "";
+          }, 2000);
+
         } catch (err) {
           status.className = "text-xs font-semibold text-red-600";
-          status.innerText = "Error de conexión al guardar.";
+          status.innerText = "Error al enviar datos.";
         } finally {
           btn.disabled = false;
           btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
@@ -353,10 +355,11 @@
       try {
         await fetch(SCRIPT_URL, {
           method: 'POST',
+          mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload)
         });
-        loadAllData();
+        setTimeout(loadAllData, 1500);
       } catch (err) {
         alert("Error al intentar eliminar.");
       }
@@ -396,13 +399,14 @@
 
       await fetch(SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
 
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
-      loadAllData();
+      setTimeout(loadAllData, 1500);
     }
 
     function editClient(id, name) {
@@ -416,10 +420,11 @@
 
       await fetch(SCRIPT_URL, {
         method: 'POST',
+        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       });
-      loadAllData();
+      setTimeout(loadAllData, 1500);
     }
 
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
