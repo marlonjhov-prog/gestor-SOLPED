@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Documentos PDF</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --text-color: #0f172a;
+      --border-color: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      line-height: 1.6;
+      padding: 20px;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+    .hidden { display: none !important; }
+
+    /* Estilos del Login */
+    .login-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 80vh;
+    }
+
+    .card {
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border-color);
+      margin-bottom: 24px;
+    }
+
+    .login-card { max-width: 400px; text-align: center; width: 100%; }
+    h2, h3 { color: #1e293b; margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; font-weight: 600; text-align: left; }
+
+    input[type="password"], input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    input[type="password"]:focus, input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover { background-color: var(--primary-hover); }
+
+    .btn-secondary { background-color: #64748b; }
+    .btn-secondary:hover { background-color: #475569; }
+
+    .btn-logout { background-color: #ef4444; }
+    .btn-logout:hover { background-color: #dc2626; }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .table-container { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      background: white;
+    }
+
+    th, td {
+      border: 1px solid var(--border-color);
+      padding: 12px;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    th { background-color: #f1f5f9; font-weight: 600; color: #334155; }
+    tr:hover { background-color: #f8fafc; }
+
+    .action-link { color: var(--primary); text-decoration: none; font-weight: 600; }
+    .action-link:hover { text-decoration: underline; }
+
+    .status-msg { font-size: 14px; margin-top: 8px; font-weight: 500; }
+    .status-msg.error { color: #dc2626; }
+    .status-msg.success { color: #16a34a; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- 1. PANTALLA DE ACCESO (LOGIN) -->
+    <div id="loginScreen" class="login-wrapper">
+      <div class="card login-card">
+        <h2>Acceso Restringido</h2>
+        <p style="margin-bottom: 20px; color: #64748b; font-size: 14px;">
+          Ingresa la clave de acceso para ver y gestionar los documentos.
+        </p>
+        <form onsubmit="handleLogin(event)">
+          <label for="passInput">Contraseña de acceso:</label>
+          <input type="password" id="passInput" placeholder="Escribe tu contraseña" required />
+          <button type="submit" style="width: 100%;">Ingresar</button>
+        </form>
+        <p id="loginError" class="status-msg error" style="margin-top: 12px;"></p>
+      </div>
+    </div>
+
+    <!-- 2. APLICACIÓN PRINCIPAL -->
+    <div id="appScreen" class="hidden">
+      
+      <div class="header-bar">
+        <h2>Gestor de Documentos PDF</h2>
+        <button class="btn-logout" onclick="handleLogout()">Cerrar Sesión</button>
+      </div>
+
+      <!-- Adjuntar PDF -->
+      <div class="card">
+        <h3>Adjuntar nuevo PDF</h3>
+        <input type="file" id="pdfInput" accept="application/pdf" />
+        <button onclick="uploadPDF()">Guardar PDF en Google Drive</button>
+        <p id="statusMsg" class="status-msg"></p>
+      </div>
+
+      <!-- Lista y Búsqueda -->
+      <div class="card">
+        <h3>Documentos Disponibles</h3>
+        
+        <div class="controls-grid">
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="🔍 Buscar por nombre de archivo..." 
+            oninput="filterDocuments()"
+          />
+          <button class="btn-secondary" onclick="loadDocuments()">🔄 Actualizar Lista</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Fecha</th>
+                <th>Nombre del Archivo</th>
+                <th style="width: 20%;">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="docsTable">
+              <!-- Se carga dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    // URL de tu aplicación web desplegada en Apps Script
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec";
+    
+    // Configura la contraseña que desees
+    const ACCESS_PASSWORD = "1234"; 
+
+    let allDocuments = [];
+
+    window.onload = function() {
+      if (sessionStorage.getItem('authenticated') === 'true') {
+        showAppScreen();
+      }
+    };
+
+    function handleLogin(event) {
+      event.preventDefault();
+      const inputPass = document.getElementById('passInput').value;
+      const errorElem = document.getElementById('loginError');
+
+      if (inputPass === ACCESS_PASSWORD) {
+        sessionStorage.setItem('authenticated', 'true');
+        errorElem.innerText = "";
+        document.getElementById('passInput').value = "";
+        showAppScreen();
+      } else {
+        errorElem.innerText = "Contraseña incorrecta. Inténtalo de nuevo.";
+      }
+    }
+
+    function showAppScreen() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('appScreen').classList.remove('hidden');
+      loadDocuments();
+    }
+
+    function handleLogout() {
+      sessionStorage.removeItem('authenticated');
+      document.getElementById('appScreen').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+
+    async function loadDocuments() {
+      const tableBody = document.getElementById('docsTable');
+      tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px;">Cargando documentos...</td></tr>';
+
+      try {
+        const response = await fetch(SCRIPT_URL);
+        allDocuments = await response.json();
+        renderDocuments(allDocuments);
+      } catch (err) {
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#dc2626;">Error al conectar con la base de datos.</td></tr>';
+      }
+    }
+
+    async function uploadPDF() {
+      const fileInput = document.getElementById('pdfInput');
+      const statusMsg = document.getElementById('statusMsg');
+
+      if (fileInput.files.length === 0) {
+        alert("Por favor, selecciona un archivo PDF.");
+        return;
+      }
+
+      const file = fileInput.files[0];
+      statusMsg.className = "status-msg";
+      statusMsg.innerText = "Subiendo archivo a Google Drive...";
+
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      reader.onload = async function () {
+        const base64Data = reader.result.split(',')[1];
+        const payload = { fileName: file.name, fileData: base64Data };
+
+        try {
+          const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+
+          const result = await response.json();
+
+          if (result.status === "success") {
+            statusMsg.className = "status-msg success";
+            statusMsg.innerText = "¡Documento subido con éxito!";
+            fileInput.value = "";
+            loadDocuments();
+          } else {
+            statusMsg.className = "status-msg error";
+            statusMsg.innerText = "Error: " + result.message;
+          }
+        } catch (err) {
+          statusMsg.className = "status-msg error";
+          statusMsg.innerText = "Error de conexión al enviar el archivo.";
+        }
+      };
+    }
+
+    function filterDocuments() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      const filtered = allDocuments.filter(doc => 
+        doc.nombre && doc.nombre.toLowerCase().includes(query)
+      );
+      renderDocuments(filtered);
+    }
+
+    function renderDocuments(documents) {
+      const tableBody = document.getElementById('docsTable');
+
+      if (documents.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color: #64748b;">No hay documentos registrados.</td></tr>';
+        return;
+      }
+
+      tableBody.innerHTML = '';
+      documents.forEach(doc => {
+        const row = document.createElement('tr');
+        const fechaFormatted = doc.fecha ? new Date(doc.fecha).toLocaleString() : 'N/A';
+        
+        row.innerHTML = `
+          <td>${fechaFormatted}</td>
+          <td><strong>${doc.nombre}</strong></td>
+          <td><a href="${doc.url}" target="_blank" class="action-link">Abrir PDF ↗</a></td>
+        `;
+        tableBody.appendChild(row);
+      });
+    }
+  </script>
+</body>
+</html>
