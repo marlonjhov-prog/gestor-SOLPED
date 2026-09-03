@@ -17,9 +17,6 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
 
-  <!-- IFRAME OCULTO PARA PROCESAR EL ENVÍO SIN ERRORES DE CORS -->
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="if(isSubmitting) handleFormSuccess();"></iframe>
-
   <!-- PANTALLA DE LOGIN -->
   <div id="loginScreen" class="flex items-center justify-center min-h-screen p-4">
     <div class="glass-card shadow-2xl rounded-2xl p-8 max-w-md w-full border border-slate-200">
@@ -132,16 +129,6 @@
             </button>
           </div>
         </form>
-
-        <!-- FORMULARIO OCULTO NATIVO -->
-        <form id="hiddenForm" action="https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec" method="POST" target="hidden_iframe" class="hidden">
-          <input type="hidden" name="solpedId" id="h_solpedId">
-          <input type="hidden" name="numSolped" id="h_numSolped">
-          <input type="hidden" name="fechaSolped" id="h_fechaSolped">
-          <input type="hidden" name="cliente" id="h_cliente">
-          <input type="hidden" name="fileName" id="h_fileName">
-          <input type="hidden" name="fileData" id="h_fileData">
-        </form>
       </div>
 
       <!-- Tabla Histórico -->
@@ -158,8 +145,9 @@
               <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por N° o Cliente..."
                      class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
-            <button onclick="loadAllData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-xl text-xs transition">
-              <i class="fa-solid fa-rotate"></i>
+            <!-- BOTÓN DE ACTUALIZAR FUNCIONAL -->
+            <button id="btnRefresh" onclick="loadAllData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl text-xs transition flex items-center justify-center border border-slate-300" title="Actualizar lista">
+              <i id="refreshIcon" class="fa-solid fa-rotate"></i>
             </button>
           </div>
         </div>
@@ -224,7 +212,6 @@
 
     let allSolpeds = [];
     let allClients = [];
-    let isSubmitting = false;
 
     window.onload = function() {
       sessionStorage.removeItem('authenticated');
@@ -257,6 +244,9 @@
     }
 
     async function loadAllData() {
+      const refreshIcon = document.getElementById('refreshIcon');
+      if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
       try {
         const res = await fetch(SCRIPT_URL);
         const data = await res.json();
@@ -268,10 +258,12 @@
         renderSolpeds(allSolpeds);
       } catch (err) {
         console.error("Error al cargar datos:", err);
+      } finally {
+        if (refreshIcon) refreshIcon.classList.remove('fa-spin');
       }
     }
 
-    function handleSaveSolped(e) {
+    async function handleSaveSolped(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
       const status = document.getElementById('statusMsg');
@@ -286,50 +278,53 @@
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Guardando...`;
       status.className = "text-xs font-semibold text-blue-600";
-      status.innerText = "Procesando archivo y enviando a Google Drive...";
+      status.innerText = "Enviando datos a la base de datos...";
 
-      document.getElementById('h_solpedId').value = editId;
-      document.getElementById('h_numSolped').value = document.getElementById('numSolped').value;
-      document.getElementById('h_fechaSolped').value = document.getElementById('fechaSolped').value;
-      document.getElementById('h_cliente').value = document.getElementById('clienteSelect').value;
+      const payload = {
+        solpedId: editId,
+        numSolped: document.getElementById('numSolped').value,
+        fechaSolped: document.getElementById('fechaSolped').value,
+        cliente: document.getElementById('clienteSelect').value
+      };
 
-      isSubmitting = true;
+      const executePost = async (dataObj) => {
+        try {
+          await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(dataObj)
+          });
+
+          status.className = "text-xs font-semibold text-emerald-600";
+          status.innerText = "¡SOLPED guardada correctamente!";
+          resetSolpedForm();
+
+          setTimeout(async () => {
+            await loadAllData();
+            status.innerText = "";
+          }, 1000);
+
+        } catch (err) {
+          status.className = "text-xs font-semibold text-red-600";
+          status.innerText = "Error de conexión al guardar.";
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
+        }
+      };
 
       if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = function() {
-          document.getElementById('h_fileName').value = file.name;
-          document.getElementById('h_fileData').value = reader.result.split(',')[1];
-          document.getElementById('hiddenForm').submit();
+        reader.onload = async function() {
+          payload.fileName = file.name;
+          payload.fileData = reader.result.split(',')[1];
+          await executePost(payload);
         };
       } else {
-        document.getElementById('h_fileName').value = "";
-        document.getElementById('h_fileData').value = "";
-        document.getElementById('hiddenForm').submit();
+        await executePost(payload);
       }
-    }
-
-    function handleFormSuccess() {
-      if (!isSubmitting) return;
-      isSubmitting = false;
-
-      const status = document.getElementById('statusMsg');
-      const btn = document.getElementById('btnSubmit');
-
-      status.className = "text-xs font-semibold text-emerald-600";
-      status.innerText = "¡SOLPED guardada exitosamente!";
-
-      btn.disabled = false;
-      btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
-
-      resetSolpedForm();
-      
-      setTimeout(() => {
-        loadAllData();
-        status.innerText = "";
-      }, 1500);
     }
 
     function editSolped(solped) {
@@ -357,14 +352,15 @@
     async function deleteSolped(rowId, fileUrl) {
       if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
 
-      const formData = new URLSearchParams();
-      formData.append('action', 'deleteSolped');
-      formData.append('rowId', rowId);
-      formData.append('fileUrl', fileUrl);
+      const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
 
       try {
-        await fetch(SCRIPT_URL, { method: 'POST', body: formData });
-        setTimeout(loadAllData, 1200);
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        setTimeout(loadAllData, 1000);
       } catch (err) {
         alert("Error al intentar eliminar.");
       }
@@ -396,15 +392,21 @@
 
     async function handleSaveClient(e) {
       e.preventDefault();
-      const formData = new URLSearchParams();
-      formData.append('action', 'saveClient');
-      formData.append('clientId', document.getElementById('modalClientId').value);
-      formData.append('clientName', document.getElementById('modalClientName').value);
+      const payload = {
+        action: 'saveClient',
+        clientId: document.getElementById('modalClientId').value,
+        clientName: document.getElementById('modalClientName').value
+      };
 
-      await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
-      setTimeout(loadAllData, 1200);
+      setTimeout(loadAllData, 1000);
     }
 
     function editClient(id, name) {
@@ -414,12 +416,14 @@
 
     async function deleteClient(id) {
       if (!confirm("¿Eliminar este cliente?")) return;
-      const formData = new URLSearchParams();
-      formData.append('action', 'deleteClient');
-      formData.append('clientId', id);
+      const payload = { action: 'deleteClient', clientId: id };
 
-      await fetch(SCRIPT_URL, { method: 'POST', body: formData });
-      setTimeout(loadAllData, 1200);
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      setTimeout(loadAllData, 1000);
     }
 
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
