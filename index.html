@@ -17,6 +17,9 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
 
+  <!-- IFRAME OCULTO PARA PROCESAR EL ENVÍO SIN ERRORES DE CORS -->
+  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="if(isSubmitting) handleFormSuccess();"></iframe>
+
   <!-- PANTALLA DE LOGIN -->
   <div id="loginScreen" class="flex items-center justify-center min-h-screen p-4">
     <div class="glass-card shadow-2xl rounded-2xl p-8 max-w-md w-full border border-slate-200">
@@ -129,6 +132,16 @@
             </button>
           </div>
         </form>
+
+        <!-- FORMULARIO OCULTO NATIVO -->
+        <form id="hiddenForm" action="https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec" method="POST" target="hidden_iframe" class="hidden">
+          <input type="hidden" name="solpedId" id="h_solpedId">
+          <input type="hidden" name="numSolped" id="h_numSolped">
+          <input type="hidden" name="fechaSolped" id="h_fechaSolped">
+          <input type="hidden" name="cliente" id="h_cliente">
+          <input type="hidden" name="fileName" id="h_fileName">
+          <input type="hidden" name="fileData" id="h_fileData">
+        </form>
       </div>
 
       <!-- Tabla Histórico -->
@@ -211,6 +224,7 @@
 
     let allSolpeds = [];
     let allClients = [];
+    let isSubmitting = false;
 
     window.onload = function() {
       sessionStorage.removeItem('authenticated');
@@ -257,7 +271,7 @@
       }
     }
 
-    async function handleSaveSolped(e) {
+    function handleSaveSolped(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
       const status = document.getElementById('statusMsg');
@@ -270,58 +284,52 @@
       }
 
       btn.disabled = true;
-      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando...`;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Guardando...`;
       status.className = "text-xs font-semibold text-blue-600";
-      status.innerText = "Enviando registro a Google Drive...";
+      status.innerText = "Procesando archivo y enviando a Google Drive...";
 
-      const payload = {
-        solpedId: editId,
-        numSolped: document.getElementById('numSolped').value,
-        fechaSolped: document.getElementById('fechaSolped').value,
-        cliente: document.getElementById('clienteSelect').value
-      };
+      document.getElementById('h_solpedId').value = editId;
+      document.getElementById('h_numSolped').value = document.getElementById('numSolped').value;
+      document.getElementById('h_fechaSolped').value = document.getElementById('fechaSolped').value;
+      document.getElementById('h_cliente').value = document.getElementById('clienteSelect').value;
 
-      const sendRequest = async (dataObj) => {
-        try {
-          // Enviar con mode no-cors para asegurar que no salte el catch falso de red
-          await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(dataObj)
-          });
-
-          status.className = "text-xs font-semibold text-emerald-600";
-          status.innerText = "¡Proceso completado con éxito!";
-          resetSolpedForm();
-
-          // Esperar 2 segundos para dar tiempo a Sheets y refrescar lista automáticamente
-          setTimeout(() => {
-            loadAllData();
-            status.innerText = "";
-          }, 2000);
-
-        } catch (err) {
-          status.className = "text-xs font-semibold text-red-600";
-          status.innerText = "Error al enviar datos.";
-        } finally {
-          btn.disabled = false;
-          btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
-        }
-      };
+      isSubmitting = true;
 
       if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = async function() {
-          payload.fileName = file.name;
-          payload.fileData = reader.result.split(',')[1];
-          await sendRequest(payload);
+        reader.onload = function() {
+          document.getElementById('h_fileName').value = file.name;
+          document.getElementById('h_fileData').value = reader.result.split(',')[1];
+          document.getElementById('hiddenForm').submit();
         };
       } else {
-        await sendRequest(payload);
+        document.getElementById('h_fileName').value = "";
+        document.getElementById('h_fileData').value = "";
+        document.getElementById('hiddenForm').submit();
       }
+    }
+
+    function handleFormSuccess() {
+      if (!isSubmitting) return;
+      isSubmitting = false;
+
+      const status = document.getElementById('statusMsg');
+      const btn = document.getElementById('btnSubmit');
+
+      status.className = "text-xs font-semibold text-emerald-600";
+      status.innerText = "¡SOLPED guardada exitosamente!";
+
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
+
+      resetSolpedForm();
+      
+      setTimeout(() => {
+        loadAllData();
+        status.innerText = "";
+      }, 1500);
     }
 
     function editSolped(solped) {
@@ -344,22 +352,19 @@
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
       document.getElementById('pdfOptionalText').classList.add('hidden');
       document.getElementById('btnCancelEdit').classList.add('hidden');
-      document.getElementById('statusMsg').innerText = '';
     }
 
     async function deleteSolped(rowId, fileUrl) {
       if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
 
-      const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
+      const formData = new URLSearchParams();
+      formData.append('action', 'deleteSolped');
+      formData.append('rowId', rowId);
+      formData.append('fileUrl', fileUrl);
 
       try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        setTimeout(loadAllData, 1500);
+        await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+        setTimeout(loadAllData, 1200);
       } catch (err) {
         alert("Error al intentar eliminar.");
       }
@@ -391,22 +396,15 @@
 
     async function handleSaveClient(e) {
       e.preventDefault();
-      const payload = {
-        action: 'saveClient',
-        clientId: document.getElementById('modalClientId').value,
-        clientName: document.getElementById('modalClientName').value
-      };
+      const formData = new URLSearchParams();
+      formData.append('action', 'saveClient');
+      formData.append('clientId', document.getElementById('modalClientId').value);
+      formData.append('clientName', document.getElementById('modalClientName').value);
 
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-
+      await fetch(SCRIPT_URL, { method: 'POST', body: formData });
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
-      setTimeout(loadAllData, 1500);
+      setTimeout(loadAllData, 1200);
     }
 
     function editClient(id, name) {
@@ -416,15 +414,12 @@
 
     async function deleteClient(id) {
       if (!confirm("¿Eliminar este cliente?")) return;
-      const payload = { action: 'deleteClient', clientId: id };
+      const formData = new URLSearchParams();
+      formData.append('action', 'deleteClient');
+      formData.append('clientId', id);
 
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-      setTimeout(loadAllData, 1500);
+      await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+      setTimeout(loadAllData, 1200);
     }
 
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
