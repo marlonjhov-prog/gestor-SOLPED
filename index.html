@@ -363,7 +363,25 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR
+    // NORMALIZACIÓN DE MONTO CON DECIMALES Y COMAS LATINAS
+    function parseAmountString(rawStr) {
+      if (!rawStr) return 0;
+      let cleaned = rawStr.trim();
+      
+      // Si la cadena tiene una coma seguida de exactamente 2 dígitos al final (ej. "65,00")
+      if (/,\d{2}$/.test(cleaned)) {
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+      } else if (/\.\d{2}$/.test(cleaned)) {
+        cleaned = cleaned.replace(/,/g, '');
+      } else {
+        cleaned = cleaned.replace(/,/g, '.');
+      }
+      
+      cleaned = cleaned.replace(/[^\d.]/g, '');
+      return parseFloat(cleaned) || 0;
+    }
+
+    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR (IA/OCR)
     async function processPdfWithIA() {
       const fileInput = document.getElementById('pdfInput');
       const cliente = document.getElementById('clienteSelect').value.toUpperCase();
@@ -387,25 +405,26 @@
         }
 
         let regexPattern;
-        if (cliente.includes("ARCSA")) {
-          regexPattern = /(?:VALOR TOTAL A CANCELAR DE LA ORDEN|Monto total de orden de pago)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        if (cliente.includes("LASA")) {
+          regexPattern = /(?:Subtotal\s*\$|TOTAL GENERAL|Total|Importe total)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
+        } else if (cliente.includes("ARCSA")) {
+          regexPattern = /(?:VALOR TOTAL A CANCELAR DE LA ORDEN|Monto total de orden de pago)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
         } else if (cliente.includes("AGRORUM")) {
-          regexPattern = /(?:Base imponible)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+          regexPattern = /(?:Base imponible)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
         } else if (cliente.includes("SEIDLABORATORY")) {
-          regexPattern = /(?:TOTAL:\s*RUTINA|Subtotal:)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+          regexPattern = /(?:TOTAL:\s*RUTINA|Subtotal:)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
         } else if (cliente.includes("ECUACHEMLAB")) {
-          regexPattern = /(?:Subtotal:|SUBTOTAL SIN IMPUESTOS)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+          regexPattern = /(?:Subtotal:|SUBTOTAL SIN IMPUESTOS)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
         } else {
-          regexPattern = /(?:Base imponible|Subtotal general|Subtotal|Total|Valor)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+          regexPattern = /(?:Subtotal\s*\$|Base imponible|Subtotal general|Subtotal|Total|Valor)\s*[:=]?\s*\$?\s*([\d.,]+)/i;
         }
 
         const match = fullText.match(regexPattern);
         if (match && match[1]) {
-          const cleanNum = match[1].replace(/,/g, '');
-          const val = parseFloat(cleanNum) || 0;
-          document.getElementById('montoUSD').value = val;
+          const val = parseAmountString(match[1]);
+          document.getElementById('montoUSD').value = val.toFixed(2);
           statusMsg.className = "text-xs font-semibold text-emerald-600";
-          statusMsg.innerText = "¡Monto extraído con IA: $" + val + "!";
+          statusMsg.innerText = "¡Monto extraído con IA: $" + val.toFixed(2) + "!";
         } else {
           statusMsg.className = "text-xs font-semibold text-amber-600";
           statusMsg.innerText = "Monto no detectado en PDF. Puedes verificarlo manualmente.";
@@ -459,7 +478,6 @@
       };
 
       const finishAndReset = () => {
-        // 1. Insertar directamente en el arreglo local
         if (editId) {
           const index = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
           if (index !== -1) allSolpeds[index] = newSolpedObj;
@@ -467,16 +485,13 @@
           allSolpeds.unshift(newSolpedObj);
         }
 
-        // 2. Renderizar tabla e indicadores inmediatamente
         filterDocuments();
 
-        // 3. Restaurar UI y limpiar campos
         status.className = "text-xs font-semibold text-emerald-600";
         status.innerText = "¡SOLPED guardada exitosamente!";
 
         resetSolpedForm();
 
-        // Limpiar mensaje tras 3 segundos
         setTimeout(() => {
           status.innerText = "";
         }, 3000);
@@ -515,7 +530,7 @@
       document.getElementById('numSolped').value = solped.numSolped;
       document.getElementById('fechaSolped').value = solped.fechaSolped;
       document.getElementById('clienteSelect').value = solped.cliente;
-      document.getElementById('montoUSD').value = solped.montoUSD || 0;
+      document.getElementById('montoUSD').value = (parseFloat(solped.montoUSD) || 0).toFixed(2);
       
       document.getElementById('formTitle').innerText = "Editar SOLPED #" + solped.numSolped;
       document.getElementById('btnSubmit').innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Actualizar SOLPED`;
@@ -582,7 +597,7 @@
 
     async function handleSaveClient(e) {
       e.preventDefault();
-      const clientName = document.getElementById('modalClientName').value;
+      const clientName = document.getElementById('modalClientName').value.trim();
       const clientId = document.getElementById('modalClientId').value || new Date().getTime().toString();
       
       const payload = {
@@ -660,11 +675,12 @@
       document.getElementById('pdfFrame').src = '';
     }
 
+    // FILTRO DE CLIENTES Y BÚSQUEDA ROBUSTO
     function filterDocuments() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
       const dateFrom = document.getElementById('filterDateFrom').value;
       const dateTo = document.getElementById('filterDateTo').value;
-      const clientFilter = document.getElementById('filterClientSelect').value;
+      const clientFilter = document.getElementById('filterClientSelect').value.trim().toLowerCase();
 
       currentFilteredSolpeds = allSolpeds.filter(s => {
         const matchQuery = !q || 
@@ -672,7 +688,8 @@
           (s.cliente && s.cliente.toLowerCase().includes(q)) ||
           (s.montoUSD && s.montoUSD.toString().includes(q));
 
-        const matchClient = !clientFilter || s.cliente === clientFilter;
+        const solpedClient = (s.cliente || "").trim().toLowerCase();
+        const matchClient = !clientFilter || solpedClient === clientFilter;
         
         let matchDate = true;
         if (s.fechaSolped) {
