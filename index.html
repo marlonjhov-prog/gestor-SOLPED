@@ -123,7 +123,6 @@
 
         <form id="solpedForm" onsubmit="handleSaveSolped(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <input type="hidden" id="editSolpedId">
-          <input type="hidden" id="editFileUrl">
 
           <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">N° SOLPED SAP</label>
@@ -157,18 +156,13 @@
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Monto ($ USD)</label>
             <div class="relative">
               <i class="fa-solid fa-dollar-sign absolute left-3 top-3 text-slate-400 text-sm"></i>
-              <input type="number" step="0.01" id="montoUSD" placeholder="0.00" required
+              <input type="number" step="0.01" id="montoUSD" placeholder="0.00 (Autodetectado por IA)"
                      class="w-full pl-9 pr-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50/50 rounded-xl border border-emerald-300 focus:ring-2 focus:ring-emerald-500 outline-none">
             </div>
           </div>
 
           <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-xs font-bold text-slate-700 uppercase">Adjunto PDF</label>
-              <button type="button" onclick="autoExtractAmount()" class="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1">
-                <i class="fa-solid fa-robot"></i> Leer $ con IA
-              </button>
-            </div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Adjunto PDF</label>
             <input type="file" id="pdfInput" accept="application/pdf"
                    class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded-xl cursor-pointer">
           </div>
@@ -361,87 +355,6 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    async function autoExtractAmount() {
-      const fileInput = document.getElementById('pdfInput');
-      const clienteSelect = document.getElementById('clienteSelect');
-      const statusMsg = document.getElementById('statusMsg');
-      const editFileUrl = document.getElementById('editFileUrl').value;
-
-      if (!clienteSelect.value) {
-        alert("Por favor selecciona primero un Cliente.");
-        return;
-      }
-
-      if (fileInput.files.length === 0 && !editFileUrl) {
-        alert("Por favor selecciona un archivo PDF o edita un registro existente.");
-        return;
-      }
-
-      statusMsg.className = "text-xs font-semibold text-blue-600";
-      statusMsg.innerText = "Analizando PDF con IA según reglas del cliente...";
-
-      if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = async function() {
-          await sendExtractRequest(file.name, reader.result.split(',')[1], clienteSelect.value);
-        };
-      } else if (editFileUrl) {
-        try {
-          const payload = {
-            action: "extractAmountFromUrl",
-            fileUrl: editFileUrl,
-            cliente: clienteSelect.value
-          };
-          const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-          });
-          const result = await res.json();
-          handleExtractResult(result);
-        } catch (err) {
-          statusMsg.className = "text-xs font-semibold text-amber-600";
-          statusMsg.innerText = "Ingresa el monto manualmente.";
-        }
-      }
-    }
-
-    async function sendExtractRequest(fileName, fileData, cliente) {
-      const statusMsg = document.getElementById('statusMsg');
-      try {
-        const payload = {
-          action: "extractAmount",
-          fileName: fileName,
-          fileData: fileData,
-          cliente: cliente
-        };
-        const res = await fetch(SCRIPT_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        const result = await res.json();
-        handleExtractResult(result);
-      } catch (err) {
-        statusMsg.className = "text-xs font-semibold text-amber-600";
-        statusMsg.innerText = "Ingresa el monto manualmente.";
-      }
-    }
-
-    function handleExtractResult(result) {
-      const statusMsg = document.getElementById('statusMsg');
-      if (result.status === "success" && result.amount > 0) {
-        document.getElementById('montoUSD').value = result.amount;
-        statusMsg.className = "text-xs font-semibold text-emerald-600";
-        statusMsg.innerText = "¡Monto extraído con éxito: $" + result.amount + "!";
-      } else {
-        statusMsg.className = "text-xs font-semibold text-amber-600";
-        statusMsg.innerText = "No se detectó un monto claro. Puedes ingresarlo manualmente.";
-      }
-    }
-
     async function handleSaveSolped(e) {
       e.preventDefault();
       const btn = document.getElementById('btnSubmit');
@@ -457,14 +370,14 @@
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Guardando...`;
       status.className = "text-xs font-semibold text-blue-600";
-      status.innerText = "Procesando envío...";
+      status.innerText = "Guardando en Drive y procesando con IA...";
 
       const payload = {
         solpedId: editId,
         numSolped: document.getElementById('numSolped').value,
         fechaSolped: document.getElementById('fechaSolped').value,
         cliente: document.getElementById('clienteSelect').value,
-        montoUSD: document.getElementById('montoUSD').value
+        montoUSD: document.getElementById('montoUSD').value || "0"
       };
 
       const processSuccessUI = () => {
@@ -478,7 +391,7 @@
         setTimeout(async () => {
           await loadAllData();
           status.innerText = "";
-        }, 1500);
+        }, 1800);
       };
 
       const executePost = async (dataObj) => {
@@ -511,11 +424,10 @@
 
     function editSolped(solped) {
       document.getElementById('editSolpedId').value = solped.id;
-      document.getElementById('editFileUrl').value = solped.fileUrl || '';
       document.getElementById('numSolped').value = solped.numSolped;
       document.getElementById('fechaSolped').value = solped.fechaSolped;
       document.getElementById('clienteSelect').value = solped.cliente;
-      document.getElementById('montoUSD').value = solped.montoUSD || 0;
+      document.getElementById('montoUSD').value = solped.montoUSD || '';
       
       document.getElementById('formTitle').innerText = "Editar SOLPED #" + solped.numSolped;
       document.getElementById('btnSubmitText').innerText = "Actualizar SOLPED";
@@ -526,7 +438,6 @@
     function resetSolpedForm() {
       document.getElementById('solpedForm').reset();
       document.getElementById('editSolpedId').value = '';
-      document.getElementById('editFileUrl').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
       document.getElementById('btnCancelEdit').classList.add('hidden');
@@ -693,7 +604,7 @@
     function renderSolpeds(list) {
       const tbody = document.getElementById('solpedTable');
       if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay registros que coincidan con los filtros.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay registros cargados.</td></tr>';
         return;
       }
 
