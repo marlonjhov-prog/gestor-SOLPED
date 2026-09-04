@@ -208,6 +208,9 @@
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-list-check text-blue-600 text-xl"></i>
             <h3 class="text-lg font-bold text-slate-900">Histórico de SOLPEDs</h3>
+            <button onclick="loadAllData()" class="text-slate-400 hover:text-blue-600 text-xs ml-2" title="Recargar datos de Google Sheets">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
           </div>
 
           <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 transition self-start lg:self-auto">
@@ -387,20 +390,14 @@
       document.getElementById('loginError').classList.add('hidden');
     }
 
+    // LECTURA EN TIEMPO REAL CON ANTI-CACHÉ
     async function loadAllData() {
       try {
-        const res = await fetch(SCRIPT_URL);
+        // Se agrega ?nocache=Date.now() para forzar la lectura sin la memoria caché del navegador
+        const res = await fetch(SCRIPT_URL + "?nocache=" + Date.now());
         const data = await res.json();
         allSolpeds = data.solpeds || [];
         allClients = data.clients || [];
-
-        // Autocorrección de montos inflados anteriores
-        allSolpeds.forEach(s => {
-          let val = parseFloat(s.montoUSD) || 0;
-          if (val >= 1000 && (s.numSolped === "10323990" || (s.cliente && s.cliente.toUpperCase().includes("LASA")))) {
-            s.montoUSD = val / 100;
-          }
-        });
 
         renderClientsSelect();
         renderClientsTable();
@@ -558,54 +555,38 @@
       status.innerText = "Guardando SOLPED...";
 
       const fileObj = fileInput.files[0];
-      let objectBlobUrl = "";
-      if (fileObj) {
-        objectBlobUrl = URL.createObjectURL(fileObj);
-      }
-
-      const clientSelectedName = document.getElementById('clienteSelect').value.trim();
-
-      if (clientSelectedName && !allClients.some(c => c.nombre.trim().toLowerCase() === clientSelectedName.toLowerCase())) {
-        allClients.push({ id: new Date().getTime().toString(), nombre: clientSelectedName });
-      }
-
-      const newSolpedObj = {
-        id: editId || new Date().getTime().toString(),
-        numSolped: numSolpedVal,
-        fechaSolped: document.getElementById('fechaSolped').value,
-        cliente: clientSelectedName,
-        montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0,
-        fileName: fileObj ? fileObj.name : "SOLPED.pdf",
-        fileUrl: objectBlobUrl || ""
-      };
 
       const payload = {
         solpedId: editId,
-        numSolped: newSolpedObj.numSolped,
-        fechaSolped: newSolpedObj.fechaSolped,
-        cliente: newSolpedObj.cliente,
-        montoUSD: newSolpedObj.montoUSD
+        numSolped: numSolpedVal,
+        fechaSolped: document.getElementById('fechaSolped').value,
+        cliente: document.getElementById('clienteSelect').value.trim(),
+        montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0
       };
 
-      const finishAndReset = () => {
-        if (editId) {
-          const index = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
-          if (index !== -1) allSolpeds[index] = newSolpedObj;
-        } else {
-          allSolpeds.unshift(newSolpedObj);
+      const sendDataToSheet = async (dataPayload) => {
+        try {
+          await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(dataPayload)
+          });
+
+          // Espera breve de persistencia en Google Drive/Sheets
+          setTimeout(async () => {
+            await loadAllData();
+            status.className = "text-xs font-semibold text-emerald-600";
+            status.innerText = "¡SOLPED guardada exitosamente!";
+            resetSolpedForm();
+            setTimeout(() => { status.innerText = ""; }, 3000);
+          }, 1500);
+
+        } catch (err) {
+          status.className = "text-xs font-semibold text-red-600";
+          status.innerText = "Error al conectar con la base de datos.";
+          btn.disabled = false;
         }
-
-        renderClientsSelect();
-        filterDocuments();
-
-        status.className = "text-xs font-semibold text-emerald-600";
-        status.innerText = "¡SOLPED guardada exitosamente!";
-
-        resetSolpedForm();
-
-        setTimeout(() => {
-          status.innerText = "";
-        }, 3000);
       };
 
       if (fileObj) {
@@ -614,25 +595,10 @@
         reader.onload = function() {
           payload.fileName = fileObj.name;
           payload.fileData = reader.result.split(',')[1];
-          
-          fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload)
-          }).catch(() => {});
-
-          finishAndReset();
+          sendDataToSheet(payload);
         };
       } else {
-        fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        }).catch(() => {});
-
-        finishAndReset();
+        sendDataToSheet(payload);
       }
     }
 
@@ -666,34 +632,35 @@
       document.getElementById('btnCancelEdit').classList.add('hidden');
     }
 
+    // ELIMINACIÓN ASÍNCRONA GARANTIZADA EN TIEMPO REAL
     async function deleteSolped(rowId, fileUrl) {
       if (currentUserRole !== "ADMIN") return;
-      if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
+      if (!confirm("¿Deseas eliminar definitivamente esta SOLPED de la base de datos?")) return;
 
-      const solpedToDelete = allSolpeds.find(s => s.id.toString() === rowId.toString());
-
-      if (solpedToDelete && solpedToDelete.cliente) {
-        const clientName = solpedToDelete.cliente.trim();
-        if (!allClients.some(c => c.nombre.trim().toLowerCase() === clientName.toLowerCase())) {
-          allClients.push({ id: new Date().getTime().toString(), nombre: clientName });
-        }
-      }
-
-      allSolpeds = allSolpeds.filter(s => s.id.toString() !== rowId.toString());
-      renderClientsSelect();
+      // Se remueve de la vista local temporalmente para respuesta inmediata
+      allSolpeds = allSolpeds.filter(s => s.id.toString().trim() !== rowId.toString().trim() && s.numSolped.toString().trim() !== rowId.toString().trim());
       filterDocuments();
 
       const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
 
-      fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      }).catch(() => {});
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+
+        // Espera de 1.5s para asegurar que Google Sheets ejecutó el sheet.deleteRow()
+        setTimeout(async () => {
+          await loadAllData();
+        }, 1500);
+
+      } catch (err) {
+        console.error("Error eliminando registro:", err);
+      }
     }
 
-    // CONSTRUCCIÓN DEL MENÚ DE CLIENTES
     function renderClientsSelect() {
       const select = document.getElementById('clienteSelect');
       const filterSelect = document.getElementById('filterClientSelect');
@@ -748,25 +715,19 @@
         clientName: clientName
       };
 
-      if (document.getElementById('modalClientId').value) {
-        const idx = allClients.findIndex(c => c.id.toString() === clientId.toString());
-        if (idx !== -1) allClients[idx].nombre = clientName;
-      } else {
-        allClients.push({ id: clientId, nombre: clientName });
-      }
-
-      renderClientsSelect();
-      renderClientsTable();
-
-      fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
-      }).catch(() => {});
+      });
 
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
+
+      setTimeout(async () => {
+        await loadAllData();
+      }, 1000);
     }
 
     function editClient(id, name) {
@@ -778,19 +739,19 @@
     async function deleteClient(id) {
       if (currentUserRole !== "ADMIN") return;
       if (!confirm("¿Eliminar este cliente?")) return;
-      
-      allClients = allClients.filter(c => c.id.toString() !== id.toString());
-      renderClientsSelect();
-      renderClientsTable();
 
       const payload = { action: 'deleteClient', clientId: id };
 
-      fetch(SCRIPT_URL, {
+      await fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
-      }).catch(() => {});
+      });
+
+      setTimeout(async () => {
+        await loadAllData();
+      }, 1000);
     }
 
     function openClientModal() { 
@@ -821,7 +782,6 @@
       document.getElementById('pdfFrame').src = '';
     }
 
-    // FILTRO Y BÚSQUEDA ROBUSTA
     function filterDocuments() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
       const dateFrom = document.getElementById('filterDateFrom').value;
