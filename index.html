@@ -434,14 +434,20 @@
       status.className = "text-xs font-semibold text-blue-600";
       status.innerText = "Guardando SOLPED...";
 
+      const fileObj = fileInput.files[0];
+      let objectBlobUrl = "";
+      if (fileObj) {
+        objectBlobUrl = URL.createObjectURL(fileObj);
+      }
+
       const newSolpedObj = {
         id: editId || new Date().getTime().toString(),
         numSolped: document.getElementById('numSolped').value,
         fechaSolped: document.getElementById('fechaSolped').value,
         cliente: document.getElementById('clienteSelect').value,
         montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0,
-        fileName: fileInput.files.length > 0 ? fileInput.files[0].name : "SOLPED.pdf",
-        fileUrl: ""
+        fileName: fileObj ? fileObj.name : "SOLPED.pdf",
+        fileUrl: objectBlobUrl || ""
       };
 
       const payload = {
@@ -453,7 +459,7 @@
       };
 
       const finishAndReset = () => {
-        // 1. Insertar / Actualizar en UI de forma inmediata
+        // 1. Insertar directamente en el arreglo local
         if (editId) {
           const index = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
           if (index !== -1) allSolpeds[index] = newSolpedObj;
@@ -461,27 +467,26 @@
           allSolpeds.unshift(newSolpedObj);
         }
 
+        // 2. Renderizar tabla e indicadores inmediatamente
         filterDocuments();
 
-        // 2. Restaurar botón inmediatamente
+        // 3. Restaurar UI y limpiar campos
         status.className = "text-xs font-semibold text-emerald-600";
         status.innerText = "¡SOLPED guardada exitosamente!";
 
         resetSolpedForm();
 
-        // 3. Sincronizar silenciosamente desde Google Sheets
-        setTimeout(async () => {
-          await loadAllData();
+        // Limpiar mensaje tras 3 segundos
+        setTimeout(() => {
           status.innerText = "";
-        }, 2000);
+        }, 3000);
       };
 
-      if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
+      if (fileObj) {
         const reader = new FileReader();
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(fileObj);
         reader.onload = function() {
-          payload.fileName = file.name;
+          payload.fileName = fileObj.name;
           payload.fileData = reader.result.split(',')[1];
           
           fetch(SCRIPT_URL, {
@@ -544,8 +549,6 @@
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       }).catch(() => {});
-
-      setTimeout(loadAllData, 1500);
     }
 
     function renderClientsSelect() {
@@ -579,11 +582,24 @@
 
     async function handleSaveClient(e) {
       e.preventDefault();
+      const clientName = document.getElementById('modalClientName').value;
+      const clientId = document.getElementById('modalClientId').value || new Date().getTime().toString();
+      
       const payload = {
         action: 'saveClient',
-        clientId: document.getElementById('modalClientId').value,
-        clientName: document.getElementById('modalClientName').value
+        clientId: clientId,
+        clientName: clientName
       };
+
+      if (document.getElementById('modalClientId').value) {
+        const idx = allClients.findIndex(c => c.id.toString() === clientId.toString());
+        if (idx !== -1) allClients[idx].nombre = clientName;
+      } else {
+        allClients.push({ id: clientId, nombre: clientName });
+      }
+
+      renderClientsSelect();
+      renderClientsTable();
 
       fetch(SCRIPT_URL, {
         method: 'POST',
@@ -594,7 +610,6 @@
 
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
-      setTimeout(loadAllData, 1200);
     }
 
     function editClient(id, name) {
@@ -604,6 +619,11 @@
 
     async function deleteClient(id) {
       if (!confirm("¿Eliminar este cliente?")) return;
+      
+      allClients = allClients.filter(c => c.id.toString() !== id.toString());
+      renderClientsSelect();
+      renderClientsTable();
+
       const payload = { action: 'deleteClient', clientId: id };
 
       fetch(SCRIPT_URL, {
@@ -612,15 +632,13 @@
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
       }).catch(() => {});
-
-      setTimeout(loadAllData, 1200);
     }
 
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
     function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
     function openPdfViewer(url, fileName) {
-      if (!url || !url.startsWith('http')) {
+      if (!url) {
         alert("Este registro no tiene una URL de PDF válida.");
         return;
       }
@@ -628,7 +646,11 @@
       const frame = document.getElementById('pdfFrame');
       document.getElementById('pdfModalTitle').innerText = fileName;
       
-      let previewUrl = url.replace('/view?usp=drivesdk', '/preview').replace('/view', '/preview');
+      let previewUrl = url;
+      if (url.startsWith('http')) {
+        previewUrl = url.replace('/view?usp=drivesdk', '/preview').replace('/view', '/preview');
+      }
+      
       frame.src = previewUrl;
       modal.classList.remove('hidden');
     }
@@ -719,7 +741,7 @@
                   <i class="fa-solid fa-file-pdf text-red-500"></i> ${displayName}
                 </button>
               ` : `
-                <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Subiendo a Drive...</span>
+                <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Procesando...</span>
               `}
             </td>
             <td class="p-3 text-center space-x-1">
