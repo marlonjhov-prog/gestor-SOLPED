@@ -367,8 +367,13 @@
       const statusMsg = document.getElementById('statusMsg');
       const editFileUrl = document.getElementById('editFileUrl').value;
 
+      if (!clienteSelect.value) {
+        alert("Por favor selecciona primero un Cliente.");
+        return;
+      }
+
       if (fileInput.files.length === 0 && !editFileUrl) {
-        alert("Por favor selecciona un archivo PDF local o selecciona una SOLPED para editar.");
+        alert("Por favor selecciona un archivo PDF o edita un registro existente.");
         return;
       }
 
@@ -383,14 +388,17 @@
           await sendExtractRequest(file.name, reader.result.split(',')[1], clienteSelect.value);
         };
       } else if (editFileUrl) {
-        // Extraer usando el archivo ya almacenado en Drive
         try {
           const payload = {
             action: "extractAmountFromUrl",
             fileUrl: editFileUrl,
             cliente: clienteSelect.value
           };
-          const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+          const res = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
           const result = await res.json();
           handleExtractResult(result);
         } catch (err) {
@@ -409,7 +417,11 @@
           fileData: fileData,
           cliente: cliente
         };
-        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const res = await fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
         const result = await res.json();
         handleExtractResult(result);
       } catch (err) {
@@ -611,7 +623,7 @@
 
     function openPdfViewer(url, fileName) {
       if (!url || !url.startsWith('http')) {
-        alert("Este registro no tiene una URL válida de PDF asociada.");
+        alert("Este registro no tiene una URL de PDF válida guardada.");
         return;
       }
       const modal = document.getElementById('pdfViewerModal');
