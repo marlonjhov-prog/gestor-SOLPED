@@ -8,6 +8,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   
+  <!-- Motor de IA / OCR en el Cliente (PDF.js) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  </script>
+
   <style>
     .glass-card {
       background: rgba(255, 255, 255, 0.95);
@@ -56,7 +62,7 @@
           </div>
           <div>
             <h1 class="font-bold text-lg leading-tight">Módulo SOLPED SAP</h1>
-            <p class="text-xs text-slate-400">Control Ejecutivo con KPIs e IA</p>
+            <p class="text-xs text-slate-400">Control Ejecutivo con KPIs e IA Automática</p>
           </div>
         </div>
         
@@ -146,14 +152,16 @@
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Cliente</label>
             <div class="relative">
               <i class="fa-solid fa-building absolute left-3 top-3 text-slate-400 text-sm"></i>
-              <select id="clienteSelect" required class="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+              <select id="clienteSelect" required onchange="processPdfWithIA()" class="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                 <option value="">Selecciona cliente...</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Monto ($ USD)</label>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">
+              Monto ($ USD) <span class="text-[10px] text-blue-600 font-normal">(Autodetectado)</span>
+            </label>
             <div class="relative">
               <i class="fa-solid fa-dollar-sign absolute left-3 top-3 text-slate-400 text-sm"></i>
               <input type="number" step="0.01" id="montoUSD" placeholder="0.00" required
@@ -162,13 +170,8 @@
           </div>
 
           <div>
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-xs font-bold text-slate-700 uppercase">Adjunto PDF</label>
-              <button type="button" onclick="autoExtractAmount()" class="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1">
-                <i class="fa-solid fa-robot"></i> Escanear $ con IA
-              </button>
-            </div>
-            <input type="file" id="pdfInput" accept="application/pdf"
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Adjunto PDF</label>
+            <input type="file" id="pdfInput" accept="application/pdf" onchange="processPdfWithIA()"
                    class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded-xl cursor-pointer">
           </div>
 
@@ -360,47 +363,58 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    async function autoExtractAmount() {
+    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR
+    async function processPdfWithIA() {
       const fileInput = document.getElementById('pdfInput');
-      const clienteSelect = document.getElementById('clienteSelect');
+      const cliente = document.getElementById('clienteSelect').value.toUpperCase();
       const statusMsg = document.getElementById('statusMsg');
 
-      if (fileInput.files.length === 0) {
-        alert("Selecciona primero un archivo PDF en tu equipo.");
-        return;
-      }
+      if (fileInput.files.length === 0) return;
 
       statusMsg.className = "text-xs font-semibold text-blue-600";
-      statusMsg.innerText = "Analizando PDF con IA...";
+      statusMsg.innerText = "IA analizando PDF...";
 
-      const file = fileInput.files[0];
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async function() {
-        try {
-          const payload = {
-            action: "extractAmount",
-            fileData: reader.result.split(',')[1],
-            cliente: clienteSelect.value
-          };
-          const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
-          const result = await res.json();
-          if (result.status === "success" && result.amount > 0) {
-            document.getElementById('montoUSD').value = result.amount;
-            statusMsg.className = "text-xs font-semibold text-emerald-600";
-            statusMsg.innerText = "¡Monto extraído: $" + result.amount + "!";
-          } else {
-            statusMsg.className = "text-xs font-semibold text-amber-600";
-            statusMsg.innerText = "No se detectó un monto automático. Puedes ingresarlo manualmente.";
-          }
-        } catch (err) {
-          statusMsg.className = "text-xs font-semibold text-slate-500";
-          statusMsg.innerText = "Ingresa el monto manualmente.";
+      try {
+        const file = fileInput.files[0];
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          fullText += textContent.items.map(item => item.str).join(" ") + " ";
         }
-      };
+
+        let regexPattern;
+        if (cliente.includes("ARCSA")) {
+          regexPattern = /(?:VALOR TOTAL A CANCELAR DE LA ORDEN|Monto total de orden de pago)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        } else if (cliente.includes("AGRORUM")) {
+          regexPattern = /(?:Base imponible)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        } else if (cliente.includes("SEIDLABORATORY")) {
+          regexPattern = /(?:TOTAL:\s*RUTINA|Subtotal:)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        } else if (cliente.includes("ECUACHEMLAB")) {
+          regexPattern = /(?:Subtotal:|SUBTOTAL SIN IMPUESTOS)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        } else {
+          regexPattern = /(?:Base imponible|Subtotal general|Subtotal|Total|Valor)\s*[:=]?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i;
+        }
+
+        const match = fullText.match(regexPattern);
+        if (match && match[1]) {
+          const cleanNum = match[1].replace(/,/g, '');
+          const val = parseFloat(cleanNum) || 0;
+          document.getElementById('montoUSD').value = val;
+          statusMsg.className = "text-xs font-semibold text-emerald-600";
+          statusMsg.innerText = "¡Monto extraído con IA: $" + val + "!";
+        } else {
+          statusMsg.className = "text-xs font-semibold text-amber-600";
+          statusMsg.innerText = "Monto no detectado en PDF. Puedes verificarlo manualmente.";
+        }
+
+      } catch (err) {
+        statusMsg.className = "text-xs font-semibold text-slate-500";
+        statusMsg.innerText = "Error leyendo PDF.";
+      }
     }
 
     async function handleSaveSolped(e) {
@@ -488,7 +502,7 @@
       document.getElementById('editSolpedId').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
-      document.getElementById('btnCancelEdit').classList.add('hidden');
+      document.getElementById('btnCancelEdit').classList.hidden = true;
       document.getElementById('statusMsg').innerText = '';
     }
 
@@ -578,7 +592,7 @@
     }
 
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
-    closeClientModal = function() { document.getElementById('clientModal').classList.add('hidden'); };
+    function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
     function openPdfViewer(url, fileName) {
       if (!url || !url.startsWith('http')) {
