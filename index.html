@@ -178,7 +178,7 @@
           <div class="md:col-span-2 lg:col-span-5 flex items-center justify-between pt-2">
             <span id="statusMsg" class="text-xs font-semibold"></span>
             <button type="submit" id="btnSubmit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/20 transition">
-              <i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>
+              <i class="fa-solid fa-cloud-arrow-up"></i> Guardar Registro
             </button>
           </div>
         </form>
@@ -453,7 +453,7 @@
       };
 
       const finishAndReset = () => {
-        // 1. Actualización inmediata en el listado local de la interfaz
+        // 1. Insertar / Actualizar en UI de forma inmediata
         if (editId) {
           const index = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
           if (index !== -1) allSolpeds[index] = newSolpedObj;
@@ -463,15 +463,13 @@
 
         filterDocuments();
 
-        // 2. Desbloquear botón y UI
+        // 2. Restaurar botón inmediatamente
         status.className = "text-xs font-semibold text-emerald-600";
         status.innerText = "¡SOLPED guardada exitosamente!";
+
         resetSolpedForm();
 
-        btn.disabled = false;
-        btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
-
-        // 3. Sincronización en segundo plano desde Sheets
+        // 3. Sincronizar silenciosamente desde Google Sheets
         setTimeout(async () => {
           await loadAllData();
           status.innerText = "";
@@ -515,7 +513,7 @@
       document.getElementById('montoUSD').value = solped.montoUSD || 0;
       
       document.getElementById('formTitle').innerText = "Editar SOLPED #" + solped.numSolped;
-      document.getElementById('btnSubmitText').innerText = "Actualizar SOLPED";
+      document.getElementById('btnSubmit').innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Actualizar SOLPED`;
       document.getElementById('btnCancelEdit').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -524,9 +522,12 @@
       document.getElementById('solpedForm').reset();
       document.getElementById('editSolpedId').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
-      document.getElementById('btnSubmitText').innerText = "Guardar Registro";
+      
+      const btn = document.getElementById('btnSubmit');
+      btn.disabled = false;
+      btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Guardar Registro`;
+      
       document.getElementById('btnCancelEdit').classList.add('hidden');
-      document.getElementById('statusMsg').innerText = '';
     }
 
     async function deleteSolped(rowId, fileUrl) {
