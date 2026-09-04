@@ -56,7 +56,7 @@
           </div>
           <div>
             <h1 class="font-bold text-lg leading-tight">Módulo SOLPED SAP</h1>
-            <p class="text-xs text-slate-400">Registro de Solicitudes de Pedido</p>
+            <p class="text-xs text-slate-400">Registro con IA e Indicadores USD</p>
           </div>
         </div>
         
@@ -73,11 +73,11 @@
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
-      <!-- Formulario -->
+      <!-- Formulario con Extracción IA USD -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
           <div class="flex items-center gap-2">
-            <i id="formIcon" class="fa-solid fa-circle-plus text-blue-600 text-xl"></i>
+            <i id="formIcon" class="fa-solid fa-wand-magic-sparkles text-blue-600 text-xl"></i>
             <h3 id="formTitle" class="text-lg font-bold text-slate-900">Registrar Nueva SOLPED</h3>
           </div>
           <button id="btnCancelEdit" onclick="resetSolpedForm()" class="hidden text-xs text-slate-500 hover:text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg">
@@ -85,7 +85,7 @@
           </button>
         </div>
 
-        <form id="solpedForm" onsubmit="handleSaveSolped(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <form id="solpedForm" onsubmit="handleSaveSolped(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <input type="hidden" id="editSolpedId">
 
           <div>
@@ -117,12 +117,21 @@
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Adjunto PDF <span id="pdfOptionalText" class="text-slate-400 text-[10px] hidden">(Opcional al editar)</span></label>
-            <input type="file" id="pdfInput" accept="application/pdf"
-                   class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded-xl cursor-pointer">
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Monto ($ USD)</label>
+            <div class="relative">
+              <i class="fa-solid fa-dollar-sign absolute left-3 top-3 text-slate-400 text-sm"></i>
+              <input type="number" step="0.01" id="montoUSD" placeholder="0.00" required
+                     class="w-full pl-9 pr-3 py-2 text-sm font-semibold text-emerald-700 bg-emerald-50/50 rounded-xl border border-emerald-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
           </div>
 
-          <div class="md:col-span-2 lg:col-span-4 flex items-center justify-between pt-2">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Adjunto PDF</label>
+            <input type="file" id="pdfInput" accept="application/pdf"
+                   class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-300 rounded-xl cursor-pointer">
+          </div>
+
+          <div class="md:col-span-2 lg:col-span-5 flex items-center justify-between pt-2">
             <span id="statusMsg" class="text-xs font-semibold"></span>
             <button type="submit" id="btnSubmit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-blue-600/20 transition">
               <i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>
@@ -142,10 +151,10 @@
           <div class="flex items-center gap-3">
             <div class="relative w-full sm:w-64">
               <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
-              <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por N° o Cliente..."
+              <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por N°, Cliente o $"
                      class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
-            <button id="btnRefresh" onclick="loadAllData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl text-xs transition flex items-center justify-center border border-slate-300" title="Actualizar lista">
+            <button id="btnRefresh" onclick="loadAllData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl text-xs transition border border-slate-300" title="Actualizar lista">
               <i id="refreshIcon" class="fa-solid fa-rotate"></i>
             </button>
           </div>
@@ -156,8 +165,9 @@
             <thead class="bg-slate-50 text-slate-700 uppercase font-bold border-b border-slate-200">
               <tr>
                 <th class="p-3">N° SOLPED</th>
-                <th class="p-3">Fecha SOLPED</th>
+                <th class="p-3">Fecha Emisión</th>
                 <th class="p-3">Cliente</th>
+                <th class="p-3 text-right">Monto ($ USD)</th>
                 <th class="p-3">Documento PDF</th>
                 <th class="p-3 text-center">Acciones</th>
               </tr>
@@ -202,6 +212,21 @@
           <tbody id="clientsTable" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- VISOR DE PDF INTEGRADO -->
+  <div id="pdfViewerModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col overflow-hidden">
+      <div class="flex items-center justify-between bg-slate-900 text-white p-4">
+        <h3 id="pdfModalTitle" class="font-bold text-sm flex items-center gap-2">
+          <i class="fa-solid fa-file-pdf text-red-500"></i> Visor de Documento
+        </h3>
+        <button onclick="closePdfViewer()" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+      <iframe id="pdfFrame" class="w-full flex-1 border-0"></iframe>
     </div>
   </div>
 
@@ -283,7 +308,8 @@
         solpedId: editId,
         numSolped: document.getElementById('numSolped').value,
         fechaSolped: document.getElementById('fechaSolped').value,
-        cliente: document.getElementById('clienteSelect').value
+        cliente: document.getElementById('clienteSelect').value,
+        montoUSD: document.getElementById('montoUSD').value
       };
 
       const processSuccessUI = () => {
@@ -333,10 +359,10 @@
       document.getElementById('numSolped').value = solped.numSolped;
       document.getElementById('fechaSolped').value = solped.fechaSolped;
       document.getElementById('clienteSelect').value = solped.cliente;
+      document.getElementById('montoUSD').value = solped.montoUSD || 0;
       
       document.getElementById('formTitle').innerText = "Editar SOLPED #" + solped.numSolped;
       document.getElementById('btnSubmitText').innerText = "Actualizar SOLPED";
-      document.getElementById('pdfOptionalText').classList.remove('hidden');
       document.getElementById('btnCancelEdit').classList.remove('hidden');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -346,7 +372,6 @@
       document.getElementById('editSolpedId').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
-      document.getElementById('pdfOptionalText').classList.add('hidden');
       document.getElementById('btnCancelEdit').classList.add('hidden');
       document.getElementById('statusMsg').innerText = '';
     }
@@ -434,11 +459,29 @@
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
     function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
+    // VISOR DE PDF INTEGRADO
+    function openPdfViewer(url, fileName) {
+      const modal = document.getElementById('pdfViewerModal');
+      const frame = document.getElementById('pdfFrame');
+      document.getElementById('pdfModalTitle').innerText = fileName;
+      
+      // Convertir vista previa pública
+      let previewUrl = url.replace('/view?usp=drivesdk', '/preview').replace('/view', '/preview');
+      frame.src = previewUrl;
+      modal.classList.remove('hidden');
+    }
+
+    function closePdfViewer() {
+      document.getElementById('pdfViewerModal').classList.add('hidden');
+      document.getElementById('pdfFrame').src = '';
+    }
+
     function filterDocuments() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
       const filtered = allSolpeds.filter(s => 
         (s.numSolped && s.numSolped.toString().toLowerCase().includes(q)) ||
-        (s.cliente && s.cliente.toLowerCase().includes(q))
+        (s.cliente && s.cliente.toLowerCase().includes(q)) ||
+        (s.montoUSD && s.montoUSD.toString().includes(q))
       );
       renderSolpeds(filtered);
     }
@@ -446,13 +489,15 @@
     function renderSolpeds(list) {
       const tbody = document.getElementById('solpedTable');
       if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">No hay registros cargados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay registros cargados.</td></tr>';
         return;
       }
 
       tbody.innerHTML = '';
       list.forEach(s => {
         const solpedObj = JSON.stringify(s).replace(/"/g, '&quot;');
+        const montoFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(s.montoUSD || 0);
+
         tbody.innerHTML += `
           <tr class="hover:bg-slate-50 transition">
             <td class="p-3 font-bold text-slate-800">
@@ -460,10 +505,11 @@
             </td>
             <td class="p-3 font-medium text-slate-600">${s.fechaSolped || 'N/A'}</td>
             <td class="p-3 font-semibold text-slate-700">${s.cliente}</td>
+            <td class="p-3 text-right font-bold text-emerald-600">${montoFormatted}</td>
             <td class="p-3">
-              <a href="${s.fileUrl}" target="_blank" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1">
+              <button onclick="openPdfViewer('${s.fileUrl}', '${s.fileName}')" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
                 <i class="fa-solid fa-file-pdf text-red-500"></i> ${s.fileName}
-              </a>
+              </button>
             </td>
             <td class="p-3 text-center space-x-1">
               <button onclick="editSolped(${solpedObj})" class="bg-blue-50 hover:bg-blue-100 text-blue-600 p-2 rounded-xl transition" title="Editar SOLPED">
