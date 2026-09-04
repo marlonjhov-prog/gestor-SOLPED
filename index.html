@@ -31,7 +31,7 @@
           <i class="fa-solid fa-file-invoice text-2xl"></i>
         </div>
         <h2 class="text-2xl font-bold text-slate-900">Gestor SOLPED SAP</h2>
-        <p class="text-slate-500 text-sm mt-1">Ingresa tu clave para acceder al panel</p>
+        <p class="text-slate-500 text-sm mt-1">Ingresa tu clave para acceder al sistema</p>
       </div>
 
       <form onsubmit="handleLogin(event)" class="space-y-4">
@@ -41,6 +41,10 @@
             <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400"></i>
             <input type="password" id="passInput" placeholder="••••••••" required 
                    class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition">
+          </div>
+          <div class="mt-2 text-[11px] text-slate-400 space-y-0.5">
+            <p><i class="fa-solid fa-shield-halved text-blue-500"></i> Administrador: Clave <b>admin123</b></p>
+            <p><i class="fa-solid fa-eye text-emerald-500"></i> Solo Lectura: Clave <b>user123</b></p>
           </div>
         </div>
         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-xl transition shadow-lg shadow-blue-600/30">
@@ -62,12 +66,14 @@
           </div>
           <div>
             <h1 class="font-bold text-lg leading-tight">Módulo SOLPED SAP</h1>
-            <p class="text-xs text-slate-400">Control Ejecutivo con KPIs e IA Automática</p>
+            <p class="text-xs text-slate-400">
+              Rol actual: <span id="userRoleBadge" class="font-semibold uppercase text-blue-400">Cargando...</span>
+            </p>
           </div>
         </div>
         
         <div class="flex items-center gap-3">
-          <button onclick="openClientModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 transition">
+          <button id="btnManageClients" onclick="openClientModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border border-slate-700 transition">
             <i class="fa-solid fa-users-gear text-blue-400"></i> Gestionar Clientes
           </button>
           <button onclick="handleLogout()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-red-500/30">
@@ -115,8 +121,8 @@
         </div>
       </div>
       
-      <!-- Formulario de Registro -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+      <!-- Formulario de Registro (Exclusivo Administrador) -->
+      <div id="formContainer" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
           <div class="flex items-center gap-2">
             <i id="formIcon" class="fa-solid fa-wand-magic-sparkles text-blue-600 text-xl"></i>
@@ -184,6 +190,12 @@
         </form>
       </div>
 
+      <!-- BANNER MODO LECTURA -->
+      <div id="readOnlyBanner" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-amber-800">
+        <i class="fa-solid fa-eye text-xl text-amber-600"></i>
+        <p class="text-xs font-medium">Estás navegando en modo <b>Solo Lectura</b>. Puedes realizar búsquedas, aplicar filtros y descargar el reporte Excel, pero las opciones de edición están deshabilitadas.</p>
+      </div>
+
       <!-- Tabla Histórico -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -237,7 +249,7 @@
                 <th class="p-3">Cliente</th>
                 <th class="p-3 text-right">Monto ($ USD)</th>
                 <th class="p-3">Documento PDF</th>
-                <th class="p-3 text-center">Acciones</th>
+                <th class="p-3 text-center action-col">Acciones</th>
               </tr>
             </thead>
             <tbody id="solpedTable" class="divide-y divide-slate-100 text-slate-600"></tbody>
@@ -300,25 +312,38 @@
 
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec";
-    const ACCESS_PASSWORD = "1234";
+    
+    // NIVELES Y CLAVES DE ACCESO
+    const PASSWORDS = {
+      ADMIN: "admin123",
+      VIEWER: "user123"
+    };
 
+    let currentUserRole = "VIEWER";
     let allSolpeds = [];
     let allClients = [];
     let currentFilteredSolpeds = [];
 
     window.onload = function() {
-      sessionStorage.removeItem('authenticated');
+      sessionStorage.removeItem('userRole');
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('appScreen').classList.add('hidden');
     };
 
     function handleLogin(event) {
       event.preventDefault();
-      if (document.getElementById('passInput').value === ACCESS_PASSWORD) {
-        sessionStorage.setItem('authenticated', 'true');
+      const enteredPass = document.getElementById('passInput').value;
+      const err = document.getElementById('loginError');
+
+      if (enteredPass === PASSWORDS.ADMIN) {
+        currentUserRole = "ADMIN";
+        sessionStorage.setItem('userRole', 'ADMIN');
+        showAppScreen();
+      } else if (enteredPass === PASSWORDS.VIEWER) {
+        currentUserRole = "VIEWER";
+        sessionStorage.setItem('userRole', 'VIEWER');
         showAppScreen();
       } else {
-        const err = document.getElementById('loginError');
         err.innerText = "Contraseña incorrecta";
         err.classList.remove('hidden');
       }
@@ -327,11 +352,31 @@
     function showAppScreen() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('appScreen').classList.remove('hidden');
+
+      const roleBadge = document.getElementById('userRoleBadge');
+      const formContainer = document.getElementById('formContainer');
+      const readOnlyBanner = document.getElementById('readOnlyBanner');
+      const btnManageClients = document.getElementById('btnManageClients');
+
+      if (currentUserRole === "ADMIN") {
+        roleBadge.innerText = "Administrador";
+        roleBadge.className = "font-semibold uppercase text-emerald-400";
+        formContainer.classList.remove('hidden');
+        readOnlyBanner.classList.add('hidden');
+        btnManageClients.classList.remove('hidden');
+      } else {
+        roleBadge.innerText = "Solo Lectura";
+        roleBadge.className = "font-semibold uppercase text-amber-400";
+        formContainer.classList.add('hidden');
+        readOnlyBanner.classList.remove('hidden');
+        btnManageClients.classList.add('hidden');
+      }
+
       loadAllData();
     }
 
     function handleLogout() {
-      sessionStorage.removeItem('authenticated');
+      sessionStorage.removeItem('userRole');
       document.getElementById('appScreen').classList.add('hidden');
       document.getElementById('loginScreen').classList.remove('hidden');
     }
@@ -371,8 +416,10 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    // VALIDACIÓN INTUITIVA Y EN TIEMPO REAL DE DUPLICADOS (AL ESCRIBIR N° O SELECCIONAR FECHA)
+    // VALIDACIÓN INTUITIVA DE DUPLICADOS EN TIEMPO REAL
     function checkDuplicateRealtime() {
+      if (currentUserRole !== "ADMIN") return false;
+
       const numInput = document.getElementById('numSolped');
       const numSolpedVal = numInput.value.trim();
       const editId = document.getElementById('editSolpedId').value;
@@ -481,6 +528,7 @@
 
     async function handleSaveSolped(e) {
       e.preventDefault();
+      if (currentUserRole !== "ADMIN") return;
 
       if (checkDuplicateRealtime()) {
         alert("Atención: No se puede registrar esta SOLPED porque ya existe en el sistema.");
@@ -583,6 +631,8 @@
     }
 
     function editSolped(solped) {
+      if (currentUserRole !== "ADMIN") return;
+
       document.getElementById('editSolpedId').value = solped.id;
       document.getElementById('numSolped').value = solped.numSolped;
       document.getElementById('fechaSolped').value = solped.fechaSolped;
@@ -611,6 +661,7 @@
     }
 
     async function deleteSolped(rowId, fileUrl) {
+      if (currentUserRole !== "ADMIN") return;
       if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
 
       const solpedToDelete = allSolpeds.find(s => s.id.toString() === rowId.toString());
@@ -680,6 +731,8 @@
 
     async function handleSaveClient(e) {
       e.preventDefault();
+      if (currentUserRole !== "ADMIN") return;
+
       const clientName = document.getElementById('modalClientName').value.trim();
       const clientId = document.getElementById('modalClientId').value || new Date().getTime().toString();
       
@@ -711,11 +764,13 @@
     }
 
     function editClient(id, name) {
+      if (currentUserRole !== "ADMIN") return;
       document.getElementById('modalClientId').value = id;
       document.getElementById('modalClientName').value = name;
     }
 
     async function deleteClient(id) {
+      if (currentUserRole !== "ADMIN") return;
       if (!confirm("¿Eliminar este cliente?")) return;
       
       allClients = allClients.filter(c => c.id.toString() !== id.toString());
@@ -732,7 +787,9 @@
       }).catch(() => {});
     }
 
-    function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
+    function openClientModal() { 
+      if (currentUserRole === "ADMIN") document.getElementById('clientModal').classList.remove('hidden'); 
+    }
     function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
     function openPdfViewer(url, fileName) {
@@ -758,7 +815,7 @@
       document.getElementById('pdfFrame').src = '';
     }
 
-    // FILTRO DE CLIENTES Y BÚSQUEDA
+    // FILTRO Y BÚSQUEDA ROBUSTA
     function filterDocuments() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
       const dateFrom = document.getElementById('filterDateFrom').value;
@@ -817,6 +874,8 @@
         return;
       }
 
+      const isAdmin = currentUserRole === "ADMIN";
+
       tbody.innerHTML = '';
       list.forEach(s => {
         const solpedObj = JSON.stringify(s).replace(/"/g, '&quot;');
@@ -844,13 +903,17 @@
                 <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Procesando...</span>
               `}
             </td>
-            <td class="p-3 text-center space-x-1">
-              <button onclick="editSolped(${solpedObj})" class="bg-blue-50 hover:bg-blue-100 text-blue-600 p-2 rounded-xl transition" title="Editar SOLPED">
-                <i class="fa-solid fa-pen-to-square"></i>
-              </button>
-              <button onclick="deleteSolped('${s.id}', '${s.fileUrl}')" class="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-xl transition" title="Eliminar SOLPED">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+            <td class="p-3 text-center space-x-1 action-col">
+              ${isAdmin ? `
+                <button onclick="editSolped(${solpedObj})" class="bg-blue-50 hover:bg-blue-100 text-blue-600 p-2 rounded-xl transition" title="Editar SOLPED">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteSolped('${s.id}', '${s.fileUrl}')" class="bg-red-50 hover:bg-red-100 text-red-600 p-2 rounded-xl transition" title="Eliminar SOLPED">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              ` : `
+                <span class="text-slate-300 text-xs italic"><i class="fa-solid fa-lock text-[10px]"></i> Protegido</span>
+              `}
             </td>
           </tr>
         `;
