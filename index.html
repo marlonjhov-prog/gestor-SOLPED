@@ -56,7 +56,7 @@
           </div>
           <div>
             <h1 class="font-bold text-lg leading-tight">Módulo SOLPED SAP</h1>
-            <p class="text-xs text-slate-400">Registro con IA e Indicadores USD</p>
+            <p class="text-xs text-slate-400">Control Ejecutivo con KPIs y Exportación</p>
           </div>
         </div>
         
@@ -72,8 +72,44 @@
     </header>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+      <!-- TARJETAS DE KPIs GERENCIALES -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Cotizado</p>
+            <h3 id="kpiTotalMonto" class="text-2xl font-black text-emerald-600">$0.00</h3>
+            <p class="text-[11px] text-slate-400 mt-1">Acumulado en el sistema</p>
+          </div>
+          <div class="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl border border-emerald-100">
+            <i class="fa-solid fa-sack-dollar"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">SOLPEDs Tramitadas</p>
+            <h3 id="kpiTotalCount" class="text-2xl font-black text-blue-600">0</h3>
+            <p class="text-[11px] text-slate-400 mt-1">Registros totales</p>
+          </div>
+          <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-xl border border-blue-100">
+            <i class="fa-solid fa-file-invoice"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Promedio por SOLPED</p>
+            <h3 id="kpiPromedioMonto" class="text-2xl font-black text-purple-600">$0.00</h3>
+            <p class="text-[11px] text-slate-400 mt-1">Valor promedio de compra</p>
+          </div>
+          <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center text-xl border border-purple-100">
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+        </div>
+      </div>
       
-      <!-- Formulario con Extracción IA USD -->
+      <!-- Formulario de Registro -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
           <div class="flex items-center gap-2">
@@ -140,23 +176,48 @@
         </form>
       </div>
 
-      <!-- Tabla Histórico -->
-      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <!-- Tabla Histórico con Filtros de Rango de Fecha y Descarga Excel -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div class="flex items-center gap-2">
             <i class="fa-solid fa-list-check text-blue-600 text-xl"></i>
             <h3 class="text-lg font-bold text-slate-900">Histórico de SOLPEDs</h3>
           </div>
 
-          <div class="flex items-center gap-3">
-            <div class="relative w-full sm:w-64">
-              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-sm"></i>
-              <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="Buscar por N°, Cliente o $"
-                     class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+          <!-- Botón de Exportación -->
+          <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-2 shadow-md shadow-emerald-600/20 transition self-start lg:self-auto">
+            <i class="fa-solid fa-file-excel"></i> Descargar Reporte Excel
+          </button>
+        </div>
+
+        <!-- Barra de Filtros Avanzados -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Desde</label>
+            <input type="date" id="filterDateFrom" onchange="filterDocuments()"
+                   class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Fecha Hasta</label>
+            <input type="date" id="filterDateTo" onchange="filterDocuments()"
+                   class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Filtrar Cliente</label>
+            <select id="filterClientSelect" onchange="filterDocuments()" class="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+              <option value="">Todos los clientes</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Buscar Búsqueda Libre</label>
+            <div class="relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3 top-2 text-slate-400 text-xs"></i>
+              <input type="text" id="searchInput" oninput="filterDocuments()" placeholder="N° o texto..."
+                     class="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none">
             </div>
-            <button id="btnRefresh" onclick="loadAllData()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2.5 rounded-xl text-xs transition border border-slate-300" title="Actualizar lista">
-              <i id="refreshIcon" class="fa-solid fa-rotate"></i>
-            </button>
           </div>
         </div>
 
@@ -219,7 +280,7 @@
   <div id="pdfViewerModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center hidden p-4">
     <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full h-[85vh] flex flex-col overflow-hidden">
       <div class="flex items-center justify-between bg-slate-900 text-white p-4">
-        <h3 id="pdfModalTitle" class="font-bold text-sm flex items-center gap-2">
+        <h3 id="pdfModalTitle" class="font-bold text-sm flex items-center gap-2 truncate pr-4">
           <i class="fa-solid fa-file-pdf text-red-500"></i> Visor de Documento
         </h3>
         <button onclick="closePdfViewer()" class="text-slate-400 hover:text-white">
@@ -236,6 +297,7 @@
 
     let allSolpeds = [];
     let allClients = [];
+    let currentFilteredSolpeds = [];
 
     window.onload = function() {
       sessionStorage.removeItem('authenticated');
@@ -279,12 +341,24 @@
 
         renderClientsSelect();
         renderClientsTable();
-        renderSolpeds(allSolpeds);
+        filterDocuments();
       } catch (err) {
         console.error("Error al cargar datos:", err);
       } finally {
         if (refreshIcon) refreshIcon.classList.remove('fa-spin');
       }
+    }
+
+    function calculateKPIs(list) {
+      const totalCount = list.length;
+      const totalMonto = list.reduce((acc, curr) => acc + (parseFloat(curr.montoUSD) || 0), 0);
+      const promedio = totalCount > 0 ? totalMonto / totalCount : 0;
+
+      const formatUSD = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+
+      document.getElementById('kpiTotalMonto').innerText = formatUSD(totalMonto);
+      document.getElementById('kpiTotalCount').innerText = totalCount;
+      document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
     async function handleSaveSolped(e) {
@@ -396,9 +470,14 @@
 
     function renderClientsSelect() {
       const select = document.getElementById('clienteSelect');
+      const filterSelect = document.getElementById('filterClientSelect');
+      
       select.innerHTML = '<option value="">Selecciona un cliente...</option>';
+      filterSelect.innerHTML = '<option value="">Todos los clientes</option>';
+
       allClients.forEach(c => {
         select.innerHTML += `<option value="${c.nombre}">${c.nombre}</option>`;
+        filterSelect.innerHTML += `<option value="${c.nombre}">${c.nombre}</option>`;
       });
     }
 
@@ -459,13 +538,11 @@
     function openClientModal() { document.getElementById('clientModal').classList.remove('hidden'); }
     function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
-    // VISOR DE PDF INTEGRADO
     function openPdfViewer(url, fileName) {
       const modal = document.getElementById('pdfViewerModal');
       const frame = document.getElementById('pdfFrame');
       document.getElementById('pdfModalTitle').innerText = fileName;
       
-      // Convertir vista previa pública
       let previewUrl = url.replace('/view?usp=drivesdk', '/preview').replace('/view', '/preview');
       frame.src = previewUrl;
       modal.classList.remove('hidden');
@@ -478,18 +555,58 @@
 
     function filterDocuments() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
-      const filtered = allSolpeds.filter(s => 
-        (s.numSolped && s.numSolped.toString().toLowerCase().includes(q)) ||
-        (s.cliente && s.cliente.toLowerCase().includes(q)) ||
-        (s.montoUSD && s.montoUSD.toString().includes(q))
-      );
-      renderSolpeds(filtered);
+      const dateFrom = document.getElementById('filterDateFrom').value;
+      const dateTo = document.getElementById('filterDateTo').value;
+      const clientFilter = document.getElementById('filterClientSelect').value;
+
+      currentFilteredSolpeds = allSolpeds.filter(s => {
+        const matchQuery = !q || 
+          (s.numSolped && s.numSolped.toString().toLowerCase().includes(q)) ||
+          (s.cliente && s.cliente.toLowerCase().includes(q)) ||
+          (s.montoUSD && s.montoUSD.toString().includes(q));
+
+        const matchClient = !clientFilter || s.cliente === clientFilter;
+        
+        let matchDate = true;
+        if (s.fechaSolped) {
+          if (dateFrom && s.fechaSolped < dateFrom) matchDate = false;
+          if (dateTo && s.fechaSolped > dateTo) matchDate = false;
+        }
+
+        return matchQuery && matchClient && matchDate;
+      });
+
+      calculateKPIs(currentFilteredSolpeds);
+      renderSolpeds(currentFilteredSolpeds);
+    }
+
+    function exportToCSV() {
+      if (currentFilteredSolpeds.length === 0) {
+        alert("No hay datos para exportar.");
+        return;
+      }
+
+      let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+      csvContent += "N SOLPED,Fecha Emision,Cliente,Monto USD,Nombre Archivo,Enlace PDF\n";
+
+      currentFilteredSolpeds.forEach(s => {
+        let cleanFileName = s.fileName && !s.fileName.startsWith('http') ? s.fileName : `SOLPED_${s.numSolped}.pdf`;
+        csvContent += `"${s.numSolped}","${s.fechaSolped}","${s.cliente}","${s.montoUSD}","${cleanFileName}","${s.fileUrl}"\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Reporte_SOLPEDs_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     function renderSolpeds(list) {
       const tbody = document.getElementById('solpedTable');
       if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay registros cargados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">No hay registros que coincidan con los filtros.</td></tr>';
         return;
       }
 
@@ -497,6 +614,11 @@
       list.forEach(s => {
         const solpedObj = JSON.stringify(s).replace(/"/g, '&quot;');
         const montoFormatted = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(s.montoUSD || 0);
+
+        let displayName = s.fileName || 'Ver Documento PDF';
+        if (displayName.startsWith('http')) {
+          displayName = 'Documento SOLPED #' + s.numSolped + '.pdf';
+        }
 
         tbody.innerHTML += `
           <tr class="hover:bg-slate-50 transition">
@@ -507,8 +629,8 @@
             <td class="p-3 font-semibold text-slate-700">${s.cliente}</td>
             <td class="p-3 text-right font-bold text-emerald-600">${montoFormatted}</td>
             <td class="p-3">
-              <button onclick="openPdfViewer('${s.fileUrl}', '${s.fileName}')" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100">
-                <i class="fa-solid fa-file-pdf text-red-500"></i> ${s.fileName}
+              <button onclick="openPdfViewer('${s.fileUrl}', '${displayName}')" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100 max-w-[200px] truncate" title="${displayName}">
+                <i class="fa-solid fa-file-pdf text-red-500"></i> ${displayName}
               </button>
             </td>
             <td class="p-3 text-center space-x-1">
