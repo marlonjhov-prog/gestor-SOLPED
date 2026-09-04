@@ -123,6 +123,7 @@
 
         <form id="solpedForm" onsubmit="handleSaveSolped(event)" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <input type="hidden" id="editSolpedId">
+          <input type="hidden" id="editFileUrl">
 
           <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-1">N° SOLPED SAP</label>
@@ -364,46 +365,69 @@
       const fileInput = document.getElementById('pdfInput');
       const clienteSelect = document.getElementById('clienteSelect');
       const statusMsg = document.getElementById('statusMsg');
+      const editFileUrl = document.getElementById('editFileUrl').value;
 
-      if (fileInput.files.length === 0) {
-        alert("Por favor selecciona primero un archivo PDF.");
+      if (fileInput.files.length === 0 && !editFileUrl) {
+        alert("Por favor selecciona un archivo PDF local o selecciona una SOLPED para editar.");
         return;
       }
 
-      const file = fileInput.files[0];
       statusMsg.className = "text-xs font-semibold text-blue-600";
       statusMsg.innerText = "Analizando PDF con IA según reglas del cliente...";
 
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async function() {
-        const payload = {
-          action: "extractAmount",
-          fileName: file.name,
-          fileData: reader.result.split(',')[1],
-          cliente: clienteSelect.value
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = async function() {
+          await sendExtractRequest(file.name, reader.result.split(',')[1], clienteSelect.value);
         };
-
+      } else if (editFileUrl) {
+        // Extraer usando el archivo ya almacenado en Drive
         try {
-          const res = await fetch(SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-          });
+          const payload = {
+            action: "extractAmountFromUrl",
+            fileUrl: editFileUrl,
+            cliente: clienteSelect.value
+          };
+          const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
           const result = await res.json();
-
-          if (result.status === "success" && result.amount > 0) {
-            document.getElementById('montoUSD').value = result.amount;
-            statusMsg.className = "text-xs font-semibold text-emerald-600";
-            statusMsg.innerText = "¡Monto extraído con éxito: $" + result.amount + "!";
-          } else {
-            statusMsg.className = "text-xs font-semibold text-amber-600";
-            statusMsg.innerText = "No se detectó un monto claro. Puedes ingresarlo manualmente.";
-          }
+          handleExtractResult(result);
         } catch (err) {
-          statusMsg.className = "text-xs font-semibold text-slate-500";
+          statusMsg.className = "text-xs font-semibold text-amber-600";
           statusMsg.innerText = "Ingresa el monto manualmente.";
         }
-      };
+      }
+    }
+
+    async function sendExtractRequest(fileName, fileData, cliente) {
+      const statusMsg = document.getElementById('statusMsg');
+      try {
+        const payload = {
+          action: "extractAmount",
+          fileName: fileName,
+          fileData: fileData,
+          cliente: cliente
+        };
+        const res = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        const result = await res.json();
+        handleExtractResult(result);
+      } catch (err) {
+        statusMsg.className = "text-xs font-semibold text-amber-600";
+        statusMsg.innerText = "Ingresa el monto manualmente.";
+      }
+    }
+
+    function handleExtractResult(result) {
+      const statusMsg = document.getElementById('statusMsg');
+      if (result.status === "success" && result.amount > 0) {
+        document.getElementById('montoUSD').value = result.amount;
+        statusMsg.className = "text-xs font-semibold text-emerald-600";
+        statusMsg.innerText = "¡Monto extraído con éxito: $" + result.amount + "!";
+      } else {
+        statusMsg.className = "text-xs font-semibold text-amber-600";
+        statusMsg.innerText = "No se detectó un monto claro. Puedes ingresarlo manualmente.";
+      }
     }
 
     async function handleSaveSolped(e) {
@@ -475,6 +499,7 @@
 
     function editSolped(solped) {
       document.getElementById('editSolpedId').value = solped.id;
+      document.getElementById('editFileUrl').value = solped.fileUrl || '';
       document.getElementById('numSolped').value = solped.numSolped;
       document.getElementById('fechaSolped').value = solped.fechaSolped;
       document.getElementById('clienteSelect').value = solped.cliente;
@@ -489,6 +514,7 @@
     function resetSolpedForm() {
       document.getElementById('solpedForm').reset();
       document.getElementById('editSolpedId').value = '';
+      document.getElementById('editFileUrl').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
       document.getElementById('btnCancelEdit').classList.add('hidden');
@@ -584,6 +610,10 @@
     function closeClientModal() { document.getElementById('clientModal').classList.add('hidden'); }
 
     function openPdfViewer(url, fileName) {
+      if (!url || !url.startsWith('http')) {
+        alert("Este registro no tiene una URL válida de PDF asociada.");
+        return;
+      }
       const modal = document.getElementById('pdfViewerModal');
       const frame = document.getElementById('pdfFrame');
       document.getElementById('pdfModalTitle').innerText = fileName;
