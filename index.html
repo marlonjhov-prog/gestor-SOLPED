@@ -434,15 +434,36 @@
       status.className = "text-xs font-semibold text-blue-600";
       status.innerText = "Guardando SOLPED...";
 
-      const payload = {
-        solpedId: editId,
+      const newSolpedObj = {
+        id: editId || new Date().getTime().toString(),
         numSolped: document.getElementById('numSolped').value,
         fechaSolped: document.getElementById('fechaSolped').value,
         cliente: document.getElementById('clienteSelect').value,
-        montoUSD: document.getElementById('montoUSD').value || "0"
+        montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0,
+        fileName: fileInput.files.length > 0 ? fileInput.files[0].name : "SOLPED.pdf",
+        fileUrl: ""
+      };
+
+      const payload = {
+        solpedId: editId,
+        numSolped: newSolpedObj.numSolped,
+        fechaSolped: newSolpedObj.fechaSolped,
+        cliente: newSolpedObj.cliente,
+        montoUSD: newSolpedObj.montoUSD
       };
 
       const finishAndReset = () => {
+        // 1. Actualización inmediata en el listado local de la interfaz
+        if (editId) {
+          const index = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
+          if (index !== -1) allSolpeds[index] = newSolpedObj;
+        } else {
+          allSolpeds.unshift(newSolpedObj);
+        }
+
+        filterDocuments();
+
+        // 2. Desbloquear botón y UI
         status.className = "text-xs font-semibold text-emerald-600";
         status.innerText = "¡SOLPED guardada exitosamente!";
         resetSolpedForm();
@@ -450,39 +471,38 @@
         btn.disabled = false;
         btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span id="btnSubmitText">Guardar Registro</span>`;
 
+        // 3. Sincronización en segundo plano desde Sheets
         setTimeout(async () => {
           await loadAllData();
           status.innerText = "";
-        }, 1200);
+        }, 2000);
       };
 
       if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        reader.onload = async function() {
+        reader.onload = function() {
           payload.fileName = file.name;
           payload.fileData = reader.result.split(',')[1];
           
-          try {
-            await fetch(SCRIPT_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: JSON.stringify(payload)
-            });
-          } catch (err) {}
-          finishAndReset();
-        };
-      } else {
-        try {
-          await fetch(SCRIPT_URL, {
+          fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
-          });
-        } catch (err) {}
+          }).catch(() => {});
+
+          finishAndReset();
+        };
+      } else {
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        }).catch(() => {});
+
         finishAndReset();
       }
     }
@@ -512,19 +532,19 @@
     async function deleteSolped(rowId, fileUrl) {
       if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
 
+      allSolpeds = allSolpeds.filter(s => s.id.toString() !== rowId.toString());
+      filterDocuments();
+
       const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
 
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-        setTimeout(loadAllData, 1200);
-      } catch (err) {
-        alert("Error al intentar eliminar.");
-      }
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+
+      setTimeout(loadAllData, 1500);
     }
 
     function renderClientsSelect() {
@@ -564,12 +584,12 @@
         clientName: document.getElementById('modalClientName').value
       };
 
-      await fetch(SCRIPT_URL, {
+      fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
-      });
+      }).catch(() => {});
 
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
@@ -585,12 +605,13 @@
       if (!confirm("¿Eliminar este cliente?")) return;
       const payload = { action: 'deleteClient', clientId: id };
 
-      await fetch(SCRIPT_URL, {
+      fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(payload)
-      });
+      }).catch(() => {});
+
       setTimeout(loadAllData, 1200);
     }
 
@@ -692,9 +713,13 @@
             <td class="p-3 font-semibold text-slate-700">${s.cliente}</td>
             <td class="p-3 text-right font-bold text-emerald-600">${montoFormatted}</td>
             <td class="p-3">
-              <button onclick="openPdfViewer('${s.fileUrl}', '${displayName}')" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100 max-w-[200px] truncate" title="${displayName}">
-                <i class="fa-solid fa-file-pdf text-red-500"></i> ${displayName}
-              </button>
+              ${s.fileUrl ? `
+                <button onclick="openPdfViewer('${s.fileUrl}', '${displayName}')" class="text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1.5 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-100 max-w-[200px] truncate" title="${displayName}">
+                  <i class="fa-solid fa-file-pdf text-red-500"></i> ${displayName}
+                </button>
+              ` : `
+                <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Subiendo a Drive...</span>
+              `}
             </td>
             <td class="p-3 text-center space-x-1">
               <button onclick="editSolped(${solpedObj})" class="bg-blue-50 hover:bg-blue-100 text-blue-600 p-2 rounded-xl transition" title="Editar SOLPED">
