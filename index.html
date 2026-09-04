@@ -442,7 +442,7 @@
         montoUSD: document.getElementById('montoUSD').value || "0"
       };
 
-      const processSuccessUI = () => {
+      const finishAndReset = () => {
         status.className = "text-xs font-semibold text-emerald-600";
         status.innerText = "¡SOLPED guardada exitosamente!";
         resetSolpedForm();
@@ -456,20 +456,6 @@
         }, 1200);
       };
 
-      const executePost = async (dataObj) => {
-        try {
-          await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(dataObj)
-          });
-          processSuccessUI();
-        } catch (err) {
-          processSuccessUI();
-        }
-      };
-
       if (fileInput.files.length > 0) {
         const file = fileInput.files[0];
         const reader = new FileReader();
@@ -477,10 +463,27 @@
         reader.onload = async function() {
           payload.fileName = file.name;
           payload.fileData = reader.result.split(',')[1];
-          await executePost(payload);
+          
+          try {
+            await fetch(SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            });
+          } catch (err) {}
+          finishAndReset();
         };
       } else {
-        await executePost(payload);
+        try {
+          await fetch(SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+          });
+        } catch (err) {}
+        finishAndReset();
       }
     }
 
@@ -502,7 +505,7 @@
       document.getElementById('editSolpedId').value = '';
       document.getElementById('formTitle').innerText = "Registrar Nueva SOLPED";
       document.getElementById('btnSubmitText').innerText = "Guardar Registro";
-      document.getElementById('btnCancelEdit').classList.hidden = true;
+      document.getElementById('btnCancelEdit').classList.add('hidden');
       document.getElementById('statusMsg').innerText = '';
     }
 
