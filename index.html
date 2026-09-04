@@ -376,7 +376,6 @@
       if (!rawStr) return 0;
       let cleaned = rawStr.trim();
 
-      // Si la cadena tiene una coma seguida de exactamente 2 dígitos al final (ej. "65,00")
       if (/,\d{2}$/.test(cleaned)) {
         cleaned = cleaned.replace(/\./g, '').replace(',', '.');
       } else if (/\.\d{2}$/.test(cleaned)) {
@@ -493,6 +492,7 @@
           allSolpeds.unshift(newSolpedObj);
         }
 
+        renderClientsSelect();
         filterDocuments();
 
         status.className = "text-xs font-semibold text-emerald-600";
@@ -562,6 +562,7 @@
       if (!confirm("¿Deseas eliminar esta SOLPED y su archivo asociado?")) return;
 
       allSolpeds = allSolpeds.filter(s => s.id.toString() !== rowId.toString());
+      renderClientsSelect();
       filterDocuments();
 
       const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
@@ -574,17 +575,31 @@
       }).catch(() => {});
     }
 
+    // CONSTRUCCIÓN DINÁMICA DEL MENÚ DE CLIENTES
     function renderClientsSelect() {
       const select = document.getElementById('clienteSelect');
       const filterSelect = document.getElementById('filterClientSelect');
+
+      const selectedValueForm = select.value;
+      const selectedValueFilter = filterSelect.value;
       
       select.innerHTML = '<option value="">Selecciona cliente...</option>';
       filterSelect.innerHTML = '<option value="">Todos los clientes</option>';
 
-      allClients.forEach(c => {
-        select.innerHTML += `<option value="${c.nombre}">${c.nombre}</option>`;
-        filterSelect.innerHTML += `<option value="${c.nombre}">${c.nombre}</option>`;
+      // Unir clientes registrados explícitamente + los que figuran en las SOLPEDs
+      const clientSet = new Set();
+      allClients.forEach(c => { if (c.nombre) clientSet.add(c.nombre.trim()); });
+      allSolpeds.forEach(s => { if (s.cliente) clientSet.add(s.cliente.trim()); });
+
+      const sortedClients = Array.from(clientSet).sort((a, b) => a.localeCompare(b));
+
+      sortedClients.forEach(clientName => {
+        select.innerHTML += `<option value="${clientName}">${clientName}</option>`;
+        filterSelect.innerHTML += `<option value="${clientName}">${clientName}</option>`;
       });
+
+      if (clientSet.has(selectedValueForm)) select.value = selectedValueForm;
+      if (clientSet.has(selectedValueFilter)) filterSelect.value = selectedValueFilter;
     }
 
     function renderClientsTable() {
