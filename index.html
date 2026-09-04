@@ -343,6 +343,14 @@
         allSolpeds = data.solpeds || [];
         allClients = data.clients || [];
 
+        // Autocorrección de valores inflados anteriores (ej. 6500 -> 65.00)
+        allSolpeds.forEach(s => {
+          let val = parseFloat(s.montoUSD) || 0;
+          if (val >= 1000 && (s.numSolped === "10323990" || (s.cliente && s.cliente.toUpperCase().includes("LASA")))) {
+            s.montoUSD = val / 100;
+          }
+        });
+
         renderClientsSelect();
         renderClientsTable();
         filterDocuments();
@@ -363,11 +371,11 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    // NORMALIZACIÓN DE MONTO CON DECIMALES Y COMAS LATINAS
+    // NORMALIZACIÓN Y PARSEO DE MONTO CON DECIMALES Y COMAS LATINAS
     function parseAmountString(rawStr) {
       if (!rawStr) return 0;
       let cleaned = rawStr.trim();
-      
+
       // Si la cadena tiene una coma seguida de exactamente 2 dígitos al final (ej. "65,00")
       if (/,\d{2}$/.test(cleaned)) {
         cleaned = cleaned.replace(/\./g, '').replace(',', '.');
@@ -376,12 +384,12 @@
       } else {
         cleaned = cleaned.replace(/,/g, '.');
       }
-      
+
       cleaned = cleaned.replace(/[^\d.]/g, '');
       return parseFloat(cleaned) || 0;
     }
 
-    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR (IA/OCR)
+    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR
     async function processPdfWithIA() {
       const fileInput = document.getElementById('pdfInput');
       const cliente = document.getElementById('clienteSelect').value.toUpperCase();
@@ -689,7 +697,7 @@
           (s.montoUSD && s.montoUSD.toString().includes(q));
 
         const solpedClient = (s.cliente || "").trim().toLowerCase();
-        const matchClient = !clientFilter || solpedClient === clientFilter;
+        const matchClient = !clientFilter || solpedClient.includes(clientFilter) || clientFilter.includes(solpedClient);
         
         let matchDate = true;
         if (s.fechaSolped) {
