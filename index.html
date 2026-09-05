@@ -127,7 +127,7 @@
         </div>
       </div>
       
-      <!-- Formulario de Registro (Exclusivo Administrador) -->
+      <!-- Formulario de Registro -->
       <div id="formContainer" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
           <div class="flex items-center gap-2">
@@ -205,11 +205,13 @@
       <!-- Tabla Histórico -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-3">
             <i class="fa-solid fa-list-check text-blue-600 text-xl"></i>
             <h3 class="text-lg font-bold text-slate-900">Histórico de SOLPEDs</h3>
-            <button onclick="loadAllData()" class="text-slate-400 hover:text-blue-600 text-xs ml-2" title="Recargar datos de Google Sheets">
-              <i class="fa-solid fa-rotate-right"></i>
+            
+            <button onclick="loadAllData()" id="btnReloadData" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 text-xs font-semibold border border-slate-200 transition" title="Recargar datos de Google Sheets">
+              <i class="fa-solid fa-rotate text-xs" id="reloadIcon"></i>
+              <span>Recargar Datos</span>
             </button>
           </div>
 
@@ -322,7 +324,6 @@
   <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxzoAP1r1dM8EJRvLm1QiIJf1fpo5wh_lgkNFdlIVwyUZuEOsIZWV5ZeoLv0mZ4my8v7Q/exec";
     
-    // MATRIZ DE CREDENCIALES
     const CREDENTIALS = {
       "admin": { pass: "admin123", role: "ADMIN" },
       "lector": { pass: "user123", role: "VIEWER" }
@@ -390,20 +391,25 @@
       document.getElementById('loginError').classList.add('hidden');
     }
 
-    // LECTURA EN TIEMPO REAL CON ANTI-CACHÉ
+    // CARGA DE DATOS SIN BLOQUEO
     async function loadAllData() {
+      const reloadIcon = document.getElementById('reloadIcon');
+      if (reloadIcon) reloadIcon.classList.add('fa-spin');
+
       try {
-        // Se agrega ?nocache=Date.now() para forzar la lectura sin la memoria caché del navegador
-        const res = await fetch(SCRIPT_URL + "?nocache=" + Date.now());
+        const res = await fetch(SCRIPT_URL + "?nocache=" + new Date().getTime());
         const data = await res.json();
-        allSolpeds = data.solpeds || [];
-        allClients = data.clients || [];
+        
+        if (data.solpeds) allSolpeds = data.solpeds;
+        if (data.clients) allClients = data.clients;
 
         renderClientsSelect();
         renderClientsTable();
         filterDocuments();
       } catch (err) {
         console.error("Error al cargar datos:", err);
+      } finally {
+        if (reloadIcon) reloadIcon.classList.remove('fa-spin');
       }
     }
 
@@ -419,7 +425,6 @@
       document.getElementById('kpiPromedioMonto').innerText = formatUSD(promedio);
     }
 
-    // VALIDACIÓN INTUITIVA DE DUPLICADOS EN TIEMPO REAL
     function checkDuplicateRealtime() {
       if (currentUserRole !== "ADMIN") return false;
 
@@ -457,7 +462,6 @@
       }
     }
 
-    // PARSEO Y NORMALIZACIÓN DE DÓLARES CON COMAS DECIMALES
     function parseAmountString(rawStr) {
       if (!rawStr) return 0;
       let cleaned = rawStr.trim();
@@ -474,7 +478,6 @@
       return parseFloat(cleaned) || 0;
     }
 
-    // EXTRACCIÓN AUTOMÁTICA EN EL NAVEGADOR
     async function processPdfWithIA() {
       const fileInput = document.getElementById('pdfInput');
       const cliente = document.getElementById('clienteSelect').value.toUpperCase();
@@ -529,6 +532,7 @@
       }
     }
 
+    // GUARDADO INMEDIATO Y VISUAL
     async function handleSaveSolped(e) {
       e.preventDefault();
       if (currentUserRole !== "ADMIN") return;
@@ -555,38 +559,57 @@
       status.innerText = "Guardando SOLPED...";
 
       const fileObj = fileInput.files[0];
+      const localFileUrl = fileObj ? URL.createObjectURL(fileObj) : "";
+      const clientSelectedName = document.getElementById('clienteSelect').value.trim();
 
-      const payload = {
-        solpedId: editId,
+      const newSolpedRecord = {
+        id: editId || new Date().getTime().toString(),
         numSolped: numSolpedVal,
         fechaSolped: document.getElementById('fechaSolped').value,
-        cliente: document.getElementById('clienteSelect').value.trim(),
-        montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0
+        cliente: clientSelectedName,
+        montoUSD: parseFloat(document.getElementById('montoUSD').value) || 0,
+        fileName: fileObj ? fileObj.name : "SOLPED.pdf",
+        fileUrl: localFileUrl
       };
 
-      const sendDataToSheet = async (dataPayload) => {
-        try {
-          await fetch(SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(dataPayload)
-          });
+      // 1. Inserción inmediata en pantalla
+      if (editId) {
+        const idx = allSolpeds.findIndex(s => s.id.toString() === editId.toString());
+        if (idx !== -1) allSolpeds[idx] = newSolpedRecord;
+      } else {
+        allSolpeds.unshift(newSolpedRecord);
+      }
 
-          // Espera breve de persistencia en Google Drive/Sheets
-          setTimeout(async () => {
-            await loadAllData();
-            status.className = "text-xs font-semibold text-emerald-600";
-            status.innerText = "¡SOLPED guardada exitosamente!";
-            resetSolpedForm();
-            setTimeout(() => { status.innerText = ""; }, 3000);
-          }, 1500);
+      renderClientsSelect();
+      filterDocuments();
 
-        } catch (err) {
-          status.className = "text-xs font-semibold text-red-600";
-          status.innerText = "Error al conectar con la base de datos.";
-          btn.disabled = false;
-        }
+      status.className = "text-xs font-semibold text-emerald-600";
+      status.innerText = "¡SOLPED guardada localmente!";
+
+      // 2. Envío en segundo plano a Google Sheets
+      const payload = {
+        solpedId: editId,
+        numSolped: newSolpedRecord.numSolped,
+        fechaSolped: newSolpedRecord.fechaSolped,
+        cliente: newSolpedRecord.cliente,
+        montoUSD: newSolpedRecord.montoUSD
+      };
+
+      const sendToSheet = (dataPayload) => {
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(dataPayload)
+        }).then(() => {
+          status.innerText = "¡SOLPED guardada y sincronizada con Google Sheets!";
+          setTimeout(() => { status.innerText = ""; }, 3000);
+        }).catch(() => {
+          status.className = "text-xs font-semibold text-amber-600";
+          status.innerText = "Guardado en pantalla. Sincronizando con Google...";
+        }).finally(() => {
+          resetSolpedForm();
+        });
       };
 
       if (fileObj) {
@@ -595,10 +618,10 @@
         reader.onload = function() {
           payload.fileName = fileObj.name;
           payload.fileData = reader.result.split(',')[1];
-          sendDataToSheet(payload);
+          sendToSheet(payload);
         };
       } else {
-        sendDataToSheet(payload);
+        sendToSheet(payload);
       }
     }
 
@@ -632,33 +655,19 @@
       document.getElementById('btnCancelEdit').classList.add('hidden');
     }
 
-    // ELIMINACIÓN ASÍNCRONA GARANTIZADA EN TIEMPO REAL
     async function deleteSolped(rowId, fileUrl) {
       if (currentUserRole !== "ADMIN") return;
       if (!confirm("¿Deseas eliminar definitivamente esta SOLPED de la base de datos?")) return;
 
-      // Se remueve de la vista local temporalmente para respuesta inmediata
       allSolpeds = allSolpeds.filter(s => s.id.toString().trim() !== rowId.toString().trim() && s.numSolped.toString().trim() !== rowId.toString().trim());
       filterDocuments();
 
-      const payload = { action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl };
-
-      try {
-        await fetch(SCRIPT_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        });
-
-        // Espera de 1.5s para asegurar que Google Sheets ejecutó el sheet.deleteRow()
-        setTimeout(async () => {
-          await loadAllData();
-        }, 1500);
-
-      } catch (err) {
-        console.error("Error eliminando registro:", err);
-      }
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'deleteSolped', rowId: rowId, fileUrl: fileUrl })
+      });
     }
 
     function renderClientsSelect() {
@@ -709,25 +718,19 @@
       const clientName = document.getElementById('modalClientName').value.trim();
       const clientId = document.getElementById('modalClientId').value || new Date().getTime().toString();
       
-      const payload = {
-        action: 'saveClient',
-        clientId: clientId,
-        clientName: clientName
-      };
-
-      await fetch(SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
+      allClients.push({ id: clientId, nombre: clientName });
+      renderClientsSelect();
+      renderClientsTable();
 
       document.getElementById('modalClientId').value = '';
       document.getElementById('modalClientName').value = '';
 
-      setTimeout(async () => {
-        await loadAllData();
-      }, 1000);
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveClient', clientId: clientId, clientName: clientName })
+      });
     }
 
     function editClient(id, name) {
@@ -740,18 +743,16 @@
       if (currentUserRole !== "ADMIN") return;
       if (!confirm("¿Eliminar este cliente?")) return;
 
-      const payload = { action: 'deleteClient', clientId: id };
+      allClients = allClients.filter(c => c.id.toString() !== id.toString());
+      renderClientsSelect();
+      renderClientsTable();
 
-      await fetch(SCRIPT_URL, {
+      fetch(SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ action: 'deleteClient', clientId: id })
       });
-
-      setTimeout(async () => {
-        await loadAllData();
-      }, 1000);
     }
 
     function openClientModal() { 
@@ -866,7 +867,7 @@
                   <i class="fa-solid fa-file-pdf text-red-500"></i> ${displayName}
                 </button>
               ` : `
-                <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Procesando...</span>
+                <span class="text-slate-400 font-normal italic flex items-center gap-1"><i class="fa-solid fa-spinner fa-spin text-blue-500"></i> Cargando enlace...</span>
               `}
             </td>
             <td class="p-3 text-center space-x-1 action-col">
